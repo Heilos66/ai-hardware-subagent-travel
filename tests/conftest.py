@@ -87,11 +87,33 @@ def frames(response):
         assert isinstance(data["createdTime"], int)
         result.append(data)
     assert result[0]["event"] == "workflow_started"
-    assert [frame["event"] for frame in result[-3:]] == ["message", "workflow_finished", "end"]
+    assert [frame["event"] for frame in result[-2:]] == ["workflow_finished", "end"]
     final = result[-2]["data"]["outputs"]["responseContent"]
-    assert result[-3]["data"]["text"] == final
-    assert result[-3]["data"]["reasoning_content"] == ""
-    return result, json.loads(final)
+    parsed = json.loads(final)
+    messages = [frame["data"] for frame in result if frame["event"] == "message"]
+    assert all(message["reasoning_content"] == "" for message in messages)
+    if parsed.get("code") == "0":
+        assert "".join(message["text"] for message in messages) == parsed["message"]
+    elif "capabilities" in parsed:
+        assert len(messages) == 1 and messages[0]["text"] == final
+    return result, parsed
+
+
+def model_sse(*texts):
+    chunks = [
+        {
+            "choices": [
+                {"index": 0, "delta": {"role": "assistant", "reasoning_content": "隐藏思考"}}
+            ]
+        },
+        *[{"choices": [{"index": 0, "delta": {"content": text}}]} for text in texts],
+        {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"completion_tokens": 3}},
+    ]
+    data = "".join(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n" for chunk in chunks)
+    return httpx.Response(
+        200, headers={"Content-Type": "text/event-stream"}, content=data + "data: [DONE]\n\n"
+    )
 
 
 async def success(request):
@@ -111,9 +133,4 @@ async def success(request):
                 "total": 1,
             },
         )
-    return httpx.Response(
-        200,
-        json={
-            "choices": [{"message": {"content": "这是秦代陶俑。", "reasoning_content": "隐藏思考"}}]
-        },
-    )
+    return model_sse("这是", "秦代陶俑。")

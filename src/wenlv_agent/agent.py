@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 
 from pydantic import ValidationError
 
@@ -7,7 +8,7 @@ from .config import Settings
 from .errors import AgentError
 from .images import prepare_image
 from .prompts import build_messages
-from .schemas import ChatInputs, Result, Stage
+from .schemas import ChatInputs, Result, Stage, TextDelta
 
 
 class TravelAgent:
@@ -23,7 +24,7 @@ class TravelAgent:
         self.search = search
         self.model = model
 
-    async def run(self, payload: object) -> AsyncIterator[Stage | Result]:
+    async def run(self, payload: object) -> AsyncIterator[Stage | TextDelta | Result]:
         yield Stage("validate", "参数校验", "Code")
         if not isinstance(payload, dict) or not isinstance(payload.get("inputs"), dict):
             raise AgentError("400", "请求必须包含inputs对象")
@@ -89,4 +90,9 @@ class TravelAgent:
             max_context_chars=self.settings.max_context_chars,
         )
         yield Stage("model", "模型请求", "Http")
-        yield Result(await self.model.generate(config, messages))
+        parts = []
+        async with aclosing(self.model.generate(config, messages)) as deltas:
+            async for text in deltas:
+                parts.append(text)
+                yield TextDelta(text)
+        yield Result({"code": "0", "message": "".join(parts)})

@@ -1,6 +1,9 @@
 import asyncio
+import json
 import math
 import re
+from collections.abc import AsyncIterator
+from contextlib import aclosing
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -10,6 +13,7 @@ from .config import Settings
 from .errors import AgentError
 from .images import ImageInput
 from .schemas import Classification, KnowledgeChunk, ModelConfig
+from .streaming import sse_events
 
 
 async def post_json(
@@ -198,7 +202,7 @@ class ModelClient:
         self.client = client
         self.settings = settings
 
-    async def generate(self, config: ModelConfig, messages: list[dict]) -> dict[str, str]:
+    async def generate(self, config: ModelConfig, messages: list[dict]) -> AsyncIterator[str]:
         endpoint = config.endpoint
         parts = urlsplit(endpoint)
         allowed = {
@@ -213,14 +217,14 @@ class ModelClient:
             "model": config.model_name,
             "messages": messages,
             "temperature": config.temperature,
-            "stream": False,
+            "stream": True,
         }
         if vision:
             model_request["thinking"] = {"type": "disabled"}
         else:
             model_request["chat_template_kwargs"] = {"thinking": False}
         token = config.auth_token.get_secret_value().strip()
-        headers = {"Accept": "application/json", "User-Agent": "travel-agent/1.0"}
+        headers = {"Accept": "text/event-stream", "User-Agent": "travel-agent/1.0"}
         if config.provider.lower() == "openai-compatible":
             headers["Authorization"] = (
                 token if token.lower().startswith("bearer ") else f"Bearer {token}"
@@ -229,25 +233,102 @@ class ModelClient:
         else:
             # Preserve the old proxy protocol for existing non-OpenAI providers.
             path = parts.path.rstrip("/")
-            if path.endswith("/invocations/stream"):
-                path = path[: -len("/stream")]
-            elif not path.endswith("/invocations"):
+            if path.endswith("/invocations"):
+                path += "/stream"
+            elif not path.endswith("/invocations/stream"):
                 if not re.fullmatch(r"[A-Za-z0-9._-]+", config.model_name):
                     raise AgentError("400", "model_name包含不支持的字符")
-                path += f"/runtimes/{config.model_name}/invocations"
+                path += f"/runtimes/{config.model_name}/invocations/stream"
             endpoint = urlunsplit(parts._replace(path=path))
             body = {
                 "temp_token": token,
                 "action": "invoke_text_vision" if vision else "invoke_text",
                 "model_request": model_request,
             }
-        result = await post_json(
-            self.client,
-            endpoint,
-            headers=headers,
-            body=body,
-            timeout_seconds=self.settings.model_timeout,
-            service="模型服务",
-            error_code="E5003",
-        )
-        return normalize_model_response(result)
+        # Each anext() can run in a different task (SSE heartbeats). Never keep an
+        # asyncio.timeout context open across a yield: its cancellation binds to a task.
+        deadline = asyncio.get_running_loop().time() + self.settings.model_timeout
+        response = None
+        try:
+            request = self.client.build_request(
+                "POST", endpoint, headers=headers, json=body, timeout=self.settings.model_timeout
+            )
+            async with asyncio.timeout_at(deadline):
+                response = await self.client.send(request, stream=True, follow_redirects=False)
+            if not 200 <= response.status_code < 300:
+                raise AgentError("E5003", f"模型服务返回HTTP {response.status_code}")
+            media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if media_type != "text/event-stream":
+                # Retain compatibility with gateways which ignore stream=true and return JSON.
+                async with asyncio.timeout_at(deadline):
+                    await response.aread()
+                try:
+                    result = response.json()
+                except (ValueError, UnicodeError):
+                    raise AgentError("E5003", "模型响应不是有效JSON或SSE") from None
+                if not isinstance(result, dict):
+                    raise AgentError("E5003", "模型响应必须是JSON对象")
+                yield normalize_model_response(result)["message"]
+                return
+
+            response.encoding = "utf-8"
+            completed = False
+            has_text = False
+            async with aclosing(sse_events(response.aiter_lines())) as events:
+                while True:
+                    try:
+                        async with asyncio.timeout_at(deadline):
+                            name, data = await anext(events)
+                    except StopAsyncIteration:
+                        break
+                    if name == "error":
+                        raise AgentError("E5003", "模型服务返回流式错误")
+                    if data.strip() == "[DONE]":
+                        completed = True
+                        break
+                    if not data.strip():
+                        continue
+                    try:
+                        chunk = json.loads(data)
+                    except (ValueError, UnicodeError):
+                        raise AgentError("E5003", "模型流式数据不是有效JSON") from None
+                    if not isinstance(chunk, dict):
+                        raise AgentError("E5003", "模型流式数据格式错误")
+                    if "error" in chunk or "code" in chunk:
+                        raise AgentError("E5003", "模型服务返回流式错误")
+                    choices = chunk.get("choices")
+                    if choices == [] and "usage" in chunk:
+                        continue
+                    if not isinstance(choices, list) or not choices:
+                        raise AgentError("E5003", "模型流式数据缺少choices")
+                    for choice in choices:
+                        if not isinstance(choice, dict):
+                            raise AgentError("E5003", "模型流式choice格式错误")
+                        if choice.get("index", 0) != 0:
+                            continue
+                        delta = choice.get("delta")
+                        if not isinstance(delta, dict):
+                            raise AgentError("E5003", "模型流式数据缺少delta")
+                        reason = choice.get("finish_reason")
+                        if reason == "content_filter":
+                            raise AgentError("E5003", "模型回答被内容过滤")
+                        content = delta.get("content")
+                        if content is not None and not isinstance(content, str):
+                            raise AgentError("E5003", "模型流式content格式错误")
+                        if content:
+                            has_text = has_text or bool(content.strip())
+                            yield content
+                        # Ignore role/reasoning/tool metadata; only content reaches the user.
+                        if isinstance(reason, str) and reason:
+                            completed = True
+            if not completed:
+                raise AgentError("E5003", "模型流式响应中断，未收到结束标记")
+            if not has_text:
+                raise AgentError("E5003", "模型响应message.content为空")
+        except (TimeoutError, httpx.TimeoutException):
+            raise AgentError("E5003", "模型服务调用超时") from None
+        except httpx.HTTPError:
+            raise AgentError("E5003", "模型服务连接失败或流式响应中断") from None
+        finally:
+            if response is not None:
+                await response.aclose()

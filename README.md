@@ -112,20 +112,22 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 - `operation` 缺省、null 或空字符串等同于 `chat_completions`；不支持 `create_response` 与 `fetch_response`。
 - 文本最多 1000 字符；有图片时可不填问题。Base64 支持纯编码、URL-safe 及 data URI，统一转为 JPG/PNG 编码。
 - 默认请求体限制 16 MiB、解码图片限制 10 MiB，均可配置。图片 URL 只做协议和扩展名校验，实际下载与解码由分类服务完成；Base64 检查文件头，与原流程一致。
-- `provider=openai-compatible`：直接调用完整 endpoint，使用 Bearer token；其他 provider 延用原网关的 `temp_token/action/model_request` 协议，并支持完整 invocations 地址或基础地址。
+- `provider=openai-compatible`：直接调用完整 endpoint，使用 Bearer token；其他 provider 延用原网关的 `temp_token/action/model_request` 协议，使用 `/invocations/stream` 路径。文本、图片检索和视觉分支的模型请求都设置 `stream=true`，Accept 为 `text/event-stream`。
 - 不发送会话历史。原流程虽然开启历史记录，但模型入参没有引用历史；本实现保持单轮行为，`metadata.enable_history=false`。
 
-`POST /invocations` 固定返回 SSE，顺序为 `workflow_started`、若干 `node_started`、`message`、`workflow_finished`、`end`。过程节点使用新的稳定 ID，不模拟原来的 32 个低代码节点。过程帧不输出请求内容和凭证；每 15 秒可发送 SSE 注释心跳。
+`POST /invocations` 固定返回 SSE，顺序为 `workflow_started`、若干 `node_started`、多个 `message`、`workflow_finished`、`end`。失败时可能没有 `message`。过程节点使用新的稳定 ID，不模拟原来的 32 个低代码节点。过程帧不输出请求内容和凭证；每 15 秒可发送 SSE 注释心跳。
 
-上游模型使用非流式请求，与原流程一致。收到完整结果后发送一个 `message`，其 `data.text` 等于最终 JSON 字符串；**不是逐 token 生成**。最终结果从 `workflow_finished.data.outputs.responseContent` 获取，反序列化后为：
+模型回答实时按上游 `choices[0].delta.content` 分段返回：每个 `message.data.text` 是新生成的**纯文本增量**，保留原始空格和换行。客户端直接拼接这些 text，不要逐帧解析成业务 JSON。结束时不会再用 `message` 重发全文；完整业务结果仍从 `workflow_finished.data.outputs.responseContent` 获取，反序列化后为：
 
 ```json
 {"code":"0","message":"展品讲解内容"}
 ```
 
-能力查询结果为 `{"capabilities":{"chat_completions":true,"create_response":false,"fetch_response":false}}`。`reasoning_content` 始终为空，上游的同名字段不进入结果。
+能力查询仍通过单个 `message` 返回 JSON 字符串 `{"capabilities":{"chat_completions":true,"create_response":false,"fetch_response":false}}`，最终汇总相同。`reasoning_content` 始终为空，上游的同名字段不进入结果。
 
-业务错误仍通过 SSE 返回并以 `end` 收尾。`400/401/500` 沿用原有输入和分类错误；`E5002` 为知识检索失败，`E5003` 为模型失败，`E5004` 为服务配置或内部错误。错误不会透传上游响应正文。成功的外层 `status` 使用样例中的 `code=1, desc=succeeded`；失败扩展定义为 `code=-1, desc=failed`，调用方应读取内层业务 code。非法 JSON、错误 Content-Type、超大请求分别直接返回 HTTP 400/415/413 JSON。
+支持 SSE 分片跨网络包、UTF-8 字符拆分、CRLF、多行 data、注释心跳、角色/usage 空分片和 `[DONE]`。上游必须通过 `[DONE]` 或有效的 `finish_reason` 表明生成结束；提前断流不会把部分文字当作成功结果。如果上游忽略 `stream=true` 而返回普通 JSON，则兼容为单个文本片段；是否逐段生成取决于上游实际响应。接口依据：[华为云 OpenAI 兼容接口](https://support.huaweicloud.com/model-call-maas/model-call-021.html)、[HTTPX 流式响应](https://www.python-httpx.org/async/#streaming-responses)。
+
+业务错误在 `workflow_finished` 的业务结果中返回，并以 `end` 收尾，不把错误 JSON 混入文本增量。若已经显示部分文字，客户端需根据最终错误 code 将本次回答标为失败。`400/401/500` 沿用原有输入和分类错误；`E5002` 为知识检索失败，`E5003` 为模型失败，`E5004` 为服务配置或内部错误。错误不会透传上游响应正文。成功的外层 `status` 使用样例中的 `code=1, desc=succeeded`；失败扩展定义为 `code=-1, desc=failed`，调用方应读取内层业务 code。非法 JSON、错误 Content-Type、超大请求分别直接返回 HTTP 400/415/413 JSON。
 
 ## AgentArts 部署
 

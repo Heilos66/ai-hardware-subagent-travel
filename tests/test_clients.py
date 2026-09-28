@@ -160,17 +160,21 @@ async def test_proxy_endpoint_and_body(settings, request_body):
         return httpx.Response(200, json={"code": 0, "message": "ok"})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        result = await ModelClient(http, settings).generate(ModelConfig(**raw), [])
-    assert result["code"] == "0"
+        result = [
+            part async for part in ModelClient(http, settings).generate(ModelConfig(**raw), [])
+        ]
+    assert result == ["ok"]
     assert (
         str(seen[0].url)
-        == "https://proxy.example.test/prefix/runtimes/test-model/invocations?endpoint=Latest"
+        == "https://proxy.example.test/prefix/runtimes/test-model/invocations/stream?endpoint=Latest"
     )
     assert "Authorization" not in seen[0].headers
     body = json.loads(seen[0].content)
     assert body["temp_token"] == "model-secret"
     assert body["action"] == "invoke_text"
     assert isinstance(body["model_request"], dict)
+    assert body["model_request"]["stream"] is True
+    assert seen[0].headers["Accept"] == "text/event-stream"
 
 
 async def test_model_allowed_hosts(settings, request_body):
@@ -181,9 +185,10 @@ async def test_model_allowed_hosts(settings, request_body):
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(no_request)) as http:
         with pytest.raises(AgentError) as error:
-            await ModelClient(http, config).generate(
+            async for _ in ModelClient(http, config).generate(
                 ModelConfig(**request_body["inputs"]["model_config"][0]), []
-            )
+            ):
+                pass
     assert error.value.code == "400"
 
 

@@ -36,7 +36,8 @@
 ## 明确的兼容边界
 
 - 保留 start/message/finished/end 事件和 `responseContent` 字符串结构；过程节点数量和 ID 对应新的高代码步骤。
-- 上游非流式，最终 `message.data.text` 一次发送完整序列化结果；未实现 token 增量输出。
+- 模型请求设置 `stream=true`，将上游文本增量实时写入 `message.data.text`；最终汇总仍为 `responseContent` JSON 字符串，不重复发送全文。能力查询保留单帧 JSON。
+- 上游普通 JSON 响应兼容为单个文本片段；流中错误或提前断开时，最终结果标为失败，不将错误内容混入文本流。
 - 示例只给出成功的外层状态，失败扩展为 `code=-1, desc=failed`；内层 code 为业务结果。
 - 维持原模型未使用会话历史的单轮行为，明确返回 `enable_history=false`。平台会话 ID 不等于应用历史存储。
 - 保留文旅提示词、语言和篇幅要求；这些是模型指令，不是硬截断输出。

@@ -30,7 +30,9 @@ async def test_text_search_and_model_request(harness, request_body):
     assert str(model.url) == "https://text.example.test/v1/chat/completions?version=1"
     assert model.headers["Authorization"] == "Bearer model-secret"
     body = json.loads(model.content)
-    assert body["stream"] is False
+    assert body["stream"] is True
+    assert model.headers["Accept"] == "text/event-stream"
+    assert [e["data"]["text"] for e in events if e["event"] == "message"] == ["这是", "秦代陶俑。"]
     assert body["temperature"] == 0.1
     assert "秦代陶俑" in body["messages"][1]["content"]
     assert "隐藏思考" not in response.text
@@ -92,6 +94,7 @@ async def test_classification_threshold(harness, request_body, confidence, host)
         response = await client.post("/invocations", json=request_body)
     assert frames(response)[1]["code"] == "0"
     assert requests[-1].url.host == f"{host}.example.test"
+    assert json.loads(requests[-1].content)["stream"] is True
     if host == "text_vision":
         assert len(requests) == 2
         content = json.loads(requests[-1].content)["messages"][1]["content"]

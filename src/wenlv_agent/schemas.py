@@ -76,5 +76,10 @@ class Stage:
 
 
 @dataclass(frozen=True)
+class TextDelta:
+    text: str
+
+
+@dataclass(frozen=True)
 class Result:
     content: dict

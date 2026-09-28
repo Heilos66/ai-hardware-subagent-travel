@@ -9,7 +9,7 @@ from contextlib import aclosing, suppress
 from .agent import TravelAgent
 from .config import Settings
 from .errors import AgentError
-from .schemas import Result
+from .schemas import Result, TextDelta
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,23 @@ def event(name: str, data: dict | None = None) -> str:
     if data is not None:
         body["data"] = data
     return f"event: {name}\ndata: {json.dumps(body, ensure_ascii=False)}\n\n"
+
+
+def message_event(text: str, index: int, settings: Settings) -> str:
+    return event(
+        "message",
+        {
+            "text": text,
+            "reasoning_content": "",
+            "index": index,
+            "node_id": "node_end",
+            "node_type": "End",
+            "node_name": "结束",
+            "workflow_id": settings.workflow_id,
+            "workflow_name": settings.workflow_name,
+            "createdTime": now_ms(),
+        },
+    )
 
 
 async def workflow_events(
@@ -41,6 +58,9 @@ async def workflow_events(
                     result = step.content
                     continue
                 index += 1
+                if isinstance(step, TextDelta):
+                    yield message_event(step.text, index, settings)
+                    continue
                 yield event(
                     "node_started",
                     {
@@ -68,20 +88,10 @@ async def workflow_events(
         logger.error("workflow_failed execution_id=%s type=%s", execution_id, type(exc).__name__)
         result = {"code": "E5004", "message": "内部处理异常"}
     serialized = json.dumps(result, ensure_ascii=False)
-    yield event(
-        "message",
-        {
-            "text": serialized,
-            "reasoning_content": "",
-            "index": index + 1,
-            "node_id": "node_end",
-            "node_type": "End",
-            "node_name": "结束",
-            "workflow_id": settings.workflow_id,
-            "workflow_name": settings.workflow_name,
-            "createdTime": now_ms(),
-        },
-    )
+    # Do not append the complete answer again after its deltas, or mix JSON errors
+    # into tourist-facing text. Business failures live in the final result only.
+    if "capabilities" in result:
+        yield message_event(serialized, index + 1, settings)
     yield event(
         "workflow_finished",
         {
