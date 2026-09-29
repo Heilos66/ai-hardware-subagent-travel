@@ -93,6 +93,7 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
         "endpoint": "https://your-model-host/v1/chat/completions",
         "model_name": "your-text-model",
         "temperature": 0.1,
+        "chat_template_kwargs": {"thinking": true},
         "auth_token": "REPLACE_AT_CALL_TIME"
       },
       {
@@ -101,6 +102,7 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
         "endpoint": "https://your-model-host/v1/chat/completions",
         "model_name": "your-vision-model",
         "temperature": 0.1,
+        "thinking": {"type": "enabled"},
         "auth_token": "REPLACE_AT_CALL_TIME"
       }
     ]
@@ -113,6 +115,7 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 - 文本最多 1000 字符；有图片时可不填问题。Base64 支持纯编码、URL-safe 及 data URI，统一转为 JPG/PNG 编码。
 - 默认请求体限制 16 MiB、解码图片限制 10 MiB，均可配置。图片 URL 只做协议和扩展名校验，实际下载与解码由分类服务完成；Base64 检查文件头，与原流程一致。
 - `provider=openai-compatible`：直接调用完整 endpoint，使用 Bearer token；其他 provider 延用原网关的 `temp_token/action/model_request` 协议，使用 `/invocations/stream` 路径。文本、图片检索和视觉分支的模型请求都设置 `stream=true`，Accept 为 `text/event-stream`。
+- `model_config` 中可选传入 `chat_template_kwargs` 或 `thinking`。支持 JSON 对象或对象的 JSON 字符串（例如 `"thinking": "{\"type\":\"enabled\"}"`）；解析为对象后按原字段名透传到模型请求，代理模式放在 `model_request` 内。不按 text/text_vision 自动添加或改写思考参数；未传或为 null 时省略，空对象保留，同时传入两个字段时均保留。选择哪种字段及内部取值由调用方按模型接口确定。无效 JSON 或非对象返回参数错误。
 - 不发送会话历史。原流程虽然开启历史记录，但模型入参没有引用历史；本实现保持单轮行为，`metadata.enable_history=false`。
 
 `POST /invocations` 固定返回 SSE，顺序为 `workflow_started`、若干 `node_started`、多个 `message`、`workflow_finished`、`end`。失败时可能没有 `message`。过程节点使用新的稳定 ID，不模拟原来的 32 个低代码节点。过程帧不输出请求内容和凭证；每 15 秒可发送 SSE 注释心跳。
@@ -123,7 +126,9 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 {"code":"0","message":"展品讲解内容"}
 ```
 
-能力查询仍通过单个 `message` 返回 JSON 字符串 `{"capabilities":{"chat_completions":true,"create_response":false,"fetch_response":false}}`，最终汇总相同。`reasoning_content` 始终为空，上游的同名字段不进入结果。
+上游 `delta.reasoning_content` 同步透传到 `message.data.reasoning_content`，与 `data.text` 分开。仅有思考的片段会返回空 text；同一片段同时有正文与思考时，两者在同一事件中返回。客户端可分别拼接两类字段；最终 `responseContent.message` 只汇总正文。上游没有返回思考时，该字段仍为空，服务不会自行生成思考内容。普通 JSON 响应也保留其 `message.reasoning_content`。只有思考而没有正文的响应仍视为未生成有效回答。
+
+能力查询仍通过单个 `message` 返回 JSON 字符串 `{"capabilities":{"chat_completions":true,"create_response":false,"fetch_response":false}}`，最终汇总相同，其 `reasoning_content` 为空。
 
 支持 SSE 分片跨网络包、UTF-8 字符拆分、CRLF、多行 data、注释心跳、角色/usage 空分片和 `[DONE]`。上游必须通过 `[DONE]` 或有效的 `finish_reason` 表明生成结束；提前断流不会把部分文字当作成功结果。如果上游忽略 `stream=true` 而返回普通 JSON，则兼容为单个文本片段；是否逐段生成取决于上游实际响应。接口依据：[华为云 OpenAI 兼容接口](https://support.huaweicloud.com/model-call-maas/model-call-021.html)、[HTTPX 流式响应](https://www.python-httpx.org/async/#streaming-responses)。
 

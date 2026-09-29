@@ -92,7 +92,7 @@ class TravelAgent:
         yield Stage("model", "模型请求", "Http")
         parts = []
         async with aclosing(self.model.generate(config, messages)) as deltas:
-            async for text in deltas:
-                parts.append(text)
-                yield TextDelta(text)
+            async for delta in deltas:
+                parts.append(delta.text)
+                yield delta
         yield Result({"code": "0", "message": "".join(parts)})

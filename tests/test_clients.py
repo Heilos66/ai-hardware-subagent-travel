@@ -59,7 +59,7 @@ def test_numeric_success_code(code):
     }
 
 
-def test_reasoning_content_excluded():
+def test_reasoning_content_preserved_separately():
     result = normalize_model_response(
         {
             "choices": [
@@ -72,7 +72,7 @@ def test_reasoning_content_excluded():
             ]
         }
     )
-    assert result == {"code": "0", "message": "answer"}
+    assert result == {"code": "0", "message": "answer", "reasoning_content": "private"}
 
 
 @pytest.mark.parametrize(
@@ -163,7 +163,7 @@ async def test_proxy_endpoint_and_body(settings, request_body):
         result = [
             part async for part in ModelClient(http, settings).generate(ModelConfig(**raw), [])
         ]
-    assert result == ["ok"]
+    assert [part.text for part in result] == ["ok"]
     assert (
         str(seen[0].url)
         == "https://proxy.example.test/prefix/runtimes/test-model/invocations/stream?endpoint=Latest"

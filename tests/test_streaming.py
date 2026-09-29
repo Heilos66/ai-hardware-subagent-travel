@@ -59,7 +59,7 @@ async def test_utf8_boundaries_crlf_comments_and_multiline(settings, request_bod
                 ModelConfig(**request_body["inputs"]["model_config"][0]), []
             )
         ]
-    assert parts == ["中文", " and 日本語\n"]
+    assert [part.text for part in parts] == ["中文", " and 日本語\n"]
     assert stream.closed
 
 
@@ -127,8 +127,11 @@ async def test_reasoning_only_is_not_an_answer(harness, request_body):
 
     async with harness(handler) as (client, _):
         response = await client.post("/invocations", json=request_body)
-    assert frames(response)[1]["code"] == "E5003"
-    assert "secret-thought" not in response.text
+    events, result = frames(response)
+    assert result["code"] == "E5003"
+    messages = [e["data"] for e in events if e["event"] == "message"]
+    assert [m["text"] for m in messages] == [""]
+    assert [m["reasoning_content"] for m in messages] == ["secret-thought"]
 
 
 class PausedStream(httpx.AsyncByteStream):
@@ -225,7 +228,7 @@ async def test_cancel_after_delta_closes_upstream_immediately(settings, request_
                 ModelConfig(**request_body["inputs"]["model_config"][0]), []
             )
         ) as parts:
-            assert await anext(parts) == "第一段"
+            assert (await anext(parts)).text == "第一段"
     assert stream.closed
 
 

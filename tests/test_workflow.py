@@ -32,10 +32,12 @@ async def test_text_search_and_model_request(harness, request_body):
     body = json.loads(model.content)
     assert body["stream"] is True
     assert model.headers["Accept"] == "text/event-stream"
-    assert [e["data"]["text"] for e in events if e["event"] == "message"] == ["这是", "秦代陶俑。"]
+    messages = [e["data"] for e in events if e["event"] == "message"]
+    assert [message["text"] for message in messages] == ["", "这是", "秦代陶俑。"]
+    assert [message["reasoning_content"] for message in messages] == ["隐藏思考", "", ""]
     assert body["temperature"] == 0.1
     assert "秦代陶俑" in body["messages"][1]["content"]
-    assert "隐藏思考" not in response.text
+    assert "隐藏思考" not in result["message"]
     for secret in ("runtime-secret", "model-secret", "search-secret"):
         assert secret not in response.text
 

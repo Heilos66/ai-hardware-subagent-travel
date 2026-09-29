@@ -91,7 +91,7 @@ def frames(response):
     final = result[-2]["data"]["outputs"]["responseContent"]
     parsed = json.loads(final)
     messages = [frame["data"] for frame in result if frame["event"] == "message"]
-    assert all(message["reasoning_content"] == "" for message in messages)
+    assert all(isinstance(message["reasoning_content"], str) for message in messages)
     if parsed.get("code") == "0":
         assert "".join(message["text"] for message in messages) == parsed["message"]
     elif "capabilities" in parsed:

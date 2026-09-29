@@ -12,7 +12,7 @@ import httpx
 from .config import Settings
 from .errors import AgentError
 from .images import ImageInput
-from .schemas import Classification, KnowledgeChunk, ModelConfig
+from .schemas import Classification, KnowledgeChunk, ModelConfig, TextDelta
 from .streaming import sse_events
 
 
@@ -184,7 +184,13 @@ def normalize_model_response(body: dict) -> dict[str, str]:
         if not isinstance(code, bool) and code in (0, "0"):
             message = body.get("message")
             if isinstance(message, str) and message.strip():
-                return {"code": "0", "message": message.strip()}
+                result = {"code": "0", "message": message.strip()}
+                reasoning = body.get("reasoning_content")
+                if reasoning is not None and not isinstance(reasoning, str):
+                    raise AgentError("E5003", "模型响应reasoning_content格式错误")
+                if reasoning:
+                    result["reasoning_content"] = reasoning
+                return result
         # Upstream diagnostics may contain tokens/request bodies. Do not forward them.
         raise AgentError("E5003", "模型服务返回业务错误")
     choices = body.get("choices")
@@ -194,7 +200,13 @@ def normalize_model_response(body: dict) -> dict[str, str]:
     content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
         raise AgentError("E5003", "模型响应message.content为空或格式错误")
-    return {"code": "0", "message": content.strip()}
+    result = {"code": "0", "message": content.strip()}
+    reasoning = message.get("reasoning_content")
+    if reasoning is not None and not isinstance(reasoning, str):
+        raise AgentError("E5003", "模型响应reasoning_content格式错误")
+    if reasoning:
+        result["reasoning_content"] = reasoning
+    return result
 
 
 class ModelClient:
@@ -202,7 +214,7 @@ class ModelClient:
         self.client = client
         self.settings = settings
 
-    async def generate(self, config: ModelConfig, messages: list[dict]) -> AsyncIterator[str]:
+    async def generate(self, config: ModelConfig, messages: list[dict]) -> AsyncIterator[TextDelta]:
         endpoint = config.endpoint
         parts = urlsplit(endpoint)
         allowed = {
@@ -219,10 +231,10 @@ class ModelClient:
             "temperature": config.temperature,
             "stream": True,
         }
-        if vision:
-            model_request["thinking"] = {"type": "disabled"}
-        else:
-            model_request["chat_template_kwargs"] = {"thinking": False}
+        for field in ("chat_template_kwargs", "thinking"):
+            value = getattr(config, field)
+            if value is not None:
+                model_request[field] = value
         token = config.auth_token.get_secret_value().strip()
         headers = {"Accept": "text/event-stream", "User-Agent": "travel-agent/1.0"}
         if config.provider.lower() == "openai-compatible":
@@ -268,7 +280,8 @@ class ModelClient:
                     raise AgentError("E5003", "模型响应不是有效JSON或SSE") from None
                 if not isinstance(result, dict):
                     raise AgentError("E5003", "模型响应必须是JSON对象")
-                yield normalize_model_response(result)["message"]
+                normalized = normalize_model_response(result)
+                yield TextDelta(normalized["message"], normalized.get("reasoning_content", ""))
                 return
 
             response.encoding = "utf-8"
@@ -313,12 +326,15 @@ class ModelClient:
                         if reason == "content_filter":
                             raise AgentError("E5003", "模型回答被内容过滤")
                         content = delta.get("content")
+                        reasoning = delta.get("reasoning_content")
                         if content is not None and not isinstance(content, str):
                             raise AgentError("E5003", "模型流式content格式错误")
-                        if content:
-                            has_text = has_text or bool(content.strip())
-                            yield content
-                        # Ignore role/reasoning/tool metadata; only content reaches the user.
+                        if reasoning is not None and not isinstance(reasoning, str):
+                            raise AgentError("E5003", "模型流式reasoning_content格式错误")
+                        if content or reasoning:
+                            has_text = has_text or bool(content and content.strip())
+                            yield TextDelta(content or "", reasoning or "")
+                        # Role/tool metadata does not belong to answer or reasoning text.
                         if isinstance(reason, str) and reason:
                             completed = True
             if not completed:

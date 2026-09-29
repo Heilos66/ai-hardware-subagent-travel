@@ -25,12 +25,12 @@ def event(name: str, data: dict | None = None) -> str:
     return f"event: {name}\ndata: {json.dumps(body, ensure_ascii=False)}\n\n"
 
 
-def message_event(text: str, index: int, settings: Settings) -> str:
+def message_event(text: str, index: int, settings: Settings, reasoning_content: str = "") -> str:
     return event(
         "message",
         {
             "text": text,
-            "reasoning_content": "",
+            "reasoning_content": reasoning_content,
             "index": index,
             "node_id": "node_end",
             "node_type": "End",
@@ -59,7 +59,7 @@ async def workflow_events(
                     continue
                 index += 1
                 if isinstance(step, TextDelta):
-                    yield message_event(step.text, index, settings)
+                    yield message_event(step.text, index, settings, step.reasoning_content)
                     continue
                 yield event(
                     "node_started",

@@ -1,7 +1,8 @@
+import json
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, SecretStr, field_validator
 
 from .config import http_url
 from .errors import AgentError
@@ -16,6 +17,26 @@ class ModelConfig(BaseModel):
     temperature: float = 0.1
     auth_token: SecretStr
     name: str = ""
+    chat_template_kwargs: dict[str, JsonValue] | None = None
+    thinking: dict[str, JsonValue] | None = None
+
+    @field_validator("chat_template_kwargs", "thinking", mode="before")
+    @classmethod
+    def parse_model_options(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                raise ValueError("模型扩展配置必须是JSON对象或对象的JSON字符串") from None
+        if not isinstance(value, dict):
+            raise ValueError("模型扩展配置必须是JSON对象")
+        try:
+            json.dumps(value, allow_nan=False)
+        except (ValueError, TypeError):
+            raise ValueError("模型扩展配置必须是有效JSON对象") from None
+        return value
 
     @field_validator("endpoint")
     @classmethod
@@ -77,7 +98,8 @@ class Stage:
 
 @dataclass(frozen=True)
 class TextDelta:
-    text: str
+    text: str = ""
+    reasoning_content: str = ""
 
 
 @dataclass(frozen=True)
