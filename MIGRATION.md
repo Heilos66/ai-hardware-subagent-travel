@@ -9,7 +9,7 @@
 
 ## 当前交付
 
-已实现 `src/wenlv_agent`、配置示例、ARM64 Dockerfile、锁定依赖、分支/协议测试以及部署说明。原始 JSONL、HTML、IO 文档保持原样，不作为运行时依赖，也不进入镜像或源码分发包。
+已迁移为 `src/main/java/com/heilos/travel` 下的 Spring Boot 4.1.1 + Spring AI 2.0.1 服务，提供 Maven Wrapper、ARM64 Dockerfile、Java 回归测试以及部署说明。原始 JSONL、HTML、IO 文档保持原样，不作为运行时依赖，也不进入镜像。
 
 完整运行方式与配置见 [README.md](README.md)。接口依据见 [Koo Search 研究](docs/koosearch-research.md) 和 [AgentArts 研究](docs/agentarts-runtime-research.md)。
 
@@ -46,6 +46,17 @@
 
 ## 验证与部署边界
 
-已通过本地自动化测试，使用模拟 HTTP 服务验证三条业务路径、官方检索请求字段、SSE 顺序、失败结果、超时、Token 文件轮换、ASGI 新旧断开机制。测试不会调用真实模型或读取原始资料中的凭证。
+Java 回归测试使用本机模拟 HTTP 服务验证三条业务路径、官方检索请求字段、SSE 顺序、失败结果、整次调用超时、Token 文件轮换及 Reactor 取消传播。测试不会调用真实模型或读取原始资料中的凭证。
+
+2026-10-08 本地验证：Maven Wrapper `verify` 成功，106 项测试全部通过；可执行 JAR 的实际 HTTP/SSE 冒烟测试通过健康检查、原 IO 客户端能力查询、三条业务分支的实时分片输出，以及客户端断开后取消上游连接。构建使用临时 JDK 21，未修改本机全局 Java 环境；日常开发仍需配置 `JAVA_HOME`。当时 Docker 引擎未启动，未验证 ARM64 镜像或云端部署。
 
 真实联调需要部署配置中的 Koo Search 实例地址、认证、两个知识库 ID，以及分类服务可用密钥。未创建云资源、推送镜像或部署运行时。是否完成 Docker 镜像验证以实际交付报告为准。
+
+## 2026-10-08：Python → Spring AI 2.0
+
+- 应用改为 Java 21、Spring Boot WebFlux 与 Spring AI ChatClient；环境变量名称和已有 IO 协议兼容。服务不依赖巫山框架或 AgentArts SDK。
+- 模型通过自定义 `CompatibleChatModel` 实现 Spring AI `ChatModel` SPI。保留两种上游协议和精简 SSE/业务 JSON 兼容；未强行要求历史网关改成完整 OpenAI 数据结构。
+- 思考内容在自定义适配器中保持增量，外部 SSE 不重复思考片段；这与调研中官方 `OpenAiChatModel` 的累计元数据不同。
+- 移除 Python 服务、Python 测试和 uv 构建配置，历史实现仍可从 Git 提交 `2ce0303` 查阅。保留只依赖标准库的 `scripts/test_io_spec.py`，用于读取本地 IO 示例测试 Java 服务。
+- 修复普通 JSON 回退对正文首尾空白的裁剪；其输出现在与 SSE 一致。上游单事件大小上限也覆盖尚未结束的长行。
+- 镜像由 Maven 构建可执行 JAR 后放入 JRE 21，仍要求 `linux/arm64`、8080、`/invocations` 和 `/ping`。部署验证独立于本地测试，不将本地测试通过视为云端验收完成。

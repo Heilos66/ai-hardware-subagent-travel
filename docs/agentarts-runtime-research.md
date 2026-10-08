@@ -2,6 +2,8 @@
 
 核实日期：2026-09-28。仅使用华为云官方资料；未执行部署或真实服务调用。
 
+2026-10-08 实施补充：当前服务已迁移为 Spring Boot / Spring AI。本文 FastAPI 说明为初次选型记录，HTTP 路由、ARM64 和部署契约仍适用；Java 方案依据见 [Spring AI 调研](agentarts-spring-ai-2-research.md)。
+
 ## 结论与容器约束
 
 可以使用自行实现 HTTP 路由的 FastAPI 容器：官方要求兼容 HTTP 入站协议，SDK 是推荐方案，并非强制依赖。这个结论是根据框架无关定位和镜像接口约束作出的实现判断。镜像必须为 **ARM64**；禁止把本地磁盘当成持久存储，沙箱释放后数据会丢失。[运行时概述](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_029.html)

@@ -9,6 +9,10 @@ __pycache__/
 !.env.example
 dist/
 *.egg-info/
+target/
+.idea/
+*.iml
+.mvn/wrapper/maven-wrapper.jar
 # Original reference files include credentials; keep them local.
 io_spec.md
 workflow_*.jsonl

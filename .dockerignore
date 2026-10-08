@@ -1,8 +1,9 @@
 **
 !Dockerfile
-!pyproject.toml
-!uv.lock
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/**
 !src/
-!src/**
-src/**/__pycache__/
-src/**/*.pyc
+!src/main/
+!src/main/**

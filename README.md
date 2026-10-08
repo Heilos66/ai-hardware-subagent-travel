@@ -1,6 +1,6 @@
-# 文旅 Agent · AgentArts 高代码版
+# 文旅 Agent · Spring AI 2.0 / AgentArts
 
-将原「文旅逛展_1」低代码流程实现为 Python 服务，通过 ARM64 容器部署到 AgentArts 高代码运行时。保留 MobileNet 分类、0.7 阈值和三条问答路径，知识检索替换为 Koo Search。
+将原「文旅逛展_1」低代码流程实现为 Spring Boot 4.1.1 + Spring AI 2.0.1 服务，通过 ARM64 容器部署到 AgentArts 高代码运行时。保留 MobileNet 分类、0.7 阈值和三条问答路径，知识检索使用 Koo Search。不依赖巫山框架或 AgentArts SDK。
 
 ```text
 inputs → 参数校验
@@ -17,17 +17,19 @@ inputs → 参数校验
 
 ## 本地运行
 
-需要 Python 3.12+ 和 uv。依赖版本在 `uv.lock` 中锁定。
+需要 JDK 21，设置 `JAVA_HOME` 并将 Java 加入 `PATH`。项目自带 Maven Wrapper，首次构建下载 Maven 3.9.11 和依赖；无需预装 Maven。Spring Boot / Spring AI 版本固定于 `pom.xml`。Windows 使用 `mvnw.cmd`。
 
 ```bash
-uv sync --frozen
-cp .env.example .env
-# 编辑 .env，填入服务配置；启动时显式加载：
+./mvnw verify
+test -f .env || cp .env.example .env
+# 编辑服务配置后，在启动终端显式加载：
 set -a
 . ./.env
 set +a
-uv run --frozen uvicorn wenlv_agent.app:app --host 0.0.0.0 --port 8080 --no-access-log
+java -jar target/travel-agent.jar
 ```
+
+开发时也可执行 `./mvnw spring-boot:run`。监听端口默认 8080，可用 `PORT=8081` 调整。升级时先停止旧的 Uvicorn 服务，再启动 Java 服务，避免端口冲突。服务配置或代码变更后需重启；请求内的 `model_config` 每次读取，无需重启。IAM Token 文件继续支持每次检索重读。
 
 不配置外部服务也能启动并测试健康检查与能力查询：
 
@@ -40,7 +42,7 @@ curl -N http://localhost:8080/invocations \
 
 ### 直接测试 io_spec.md 的请求体
 
-服务启动后，在另一个终端执行：
+服务启动后，在另一个终端执行（该可选客户端脚本只用 Python 3 标准库，服务本身不依赖 Python）：
 
 ```bash
 # 只校验 Markdown 中的 JSON，不显示凭证、不调用外部服务：
@@ -130,7 +132,13 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 
 能力查询仍通过单个 `message` 返回 JSON 字符串 `{"capabilities":{"chat_completions":true,"create_response":false,"fetch_response":false}}`，最终汇总相同，其 `reasoning_content` 为空。
 
-支持 SSE 分片跨网络包、UTF-8 字符拆分、CRLF、多行 data、注释心跳、角色/usage 空分片和 `[DONE]`。上游必须通过 `[DONE]` 或有效的 `finish_reason` 表明生成结束；提前断流不会把部分文字当作成功结果。如果上游忽略 `stream=true` 而返回普通 JSON，则兼容为单个文本片段；是否逐段生成取决于上游实际响应。接口依据：[华为云 OpenAI 兼容接口](https://support.huaweicloud.com/model-call-maas/model-call-021.html)、[HTTPX 流式响应](https://www.python-httpx.org/async/#streaming-responses)。
+支持 SSE 分片跨网络包、UTF-8 字符拆分、CRLF、多行 data、注释心跳、角色/usage 空分片和 `[DONE]`。上游必须通过 `[DONE]` 或有效的 `finish_reason` 表明生成结束；提前断流不会把部分文字当作成功结果。如果上游忽略 `stream=true` 而返回普通 JSON，则兼容为单个文本片段，正文首尾空白同样保留。单个上游 SSE 事件限制为 1 MiB，普通 JSON 响应上限为 16 MiB。模型超时为整次调用总时限，不因持续返回分片而重置；客户端断开或超时都会取消上游调用。接口依据：[华为云 OpenAI 兼容接口](https://support.huaweicloud.com/model-call-maas/model-call-021.html)。
+
+### Spring AI 接入方式
+
+三条业务路径均使用 Spring AI `Prompt`、`SystemMessage`、`UserMessage`（视觉输入使用 `Media`）构建模型输入，通过 `ChatClient.prompt(...).stream().chatResponse()` 调用。项目实现 `CompatibleChatModel` 作为 Spring AI `ChatModel` SPI 适配器，承接完整 endpoint、现有代理包装、非标准精简 SSE、JSON 回退和结束标记校验；网络由 WebClient / Reactor Netty 连接池负责。每次请求创建独立模型配置，不共享认证信息和会话状态。
+
+这里使用的是自定义 `CompatibleChatModel`，没有使用官方 `OpenAiChatModel`。因此适配器的 `reasoningContent` 元数据明确保持**上游增量**，无需将官方实现的累计值再次切片。外部 `message.data.reasoning_content` 继续为增量；回归测试验证了多个思考片段不会重复拼接。未来替换为官方 `OpenAiChatModel` 时，必须重新核对其元数据语义，见[调研记录](docs/agentarts-spring-ai-2-research.md)。
 
 业务错误在 `workflow_finished` 的业务结果中返回，并以 `end` 收尾，不把错误 JSON 混入文本增量。若已经显示部分文字，客户端需根据最终错误 code 将本次回答标为失败。`400/401/500` 沿用原有输入和分类错误；`E5002` 为知识检索失败，`E5003` 为模型失败，`E5004` 为服务配置或内部错误。错误不会透传上游响应正文。成功的外层 `status` 使用样例中的 `code=1, desc=succeeded`；失败扩展定义为 `code=-1, desc=failed`，调用方应读取内层业务 code。非法 JSON、错误 Content-Type、超大请求分别直接返回 HTTP 400/415/413 JSON。
 
@@ -141,9 +149,9 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 1. 构建 ARM64 镜像：
 
    ```bash
-   docker buildx build --platform linux/arm64 -t wenlv-agent:0.1.0 --load .
-   docker image inspect wenlv-agent:0.1.0 --format '{{.Architecture}}'
-   docker run --rm -p 8080:8080 --env-file .env wenlv-agent:0.1.0
+   docker buildx build --platform linux/arm64 -t travel-agent:0.2.0 --load .
+   docker image inspect travel-agent:0.2.0 --format '{{.Architecture}}'
+   docker run --rm -p 8080:8080 --env-file .env travel-agent:0.2.0
    ```
 
 2. 使用实际 SWR 仓库地址给镜像打标签并推送。在 AgentArts 控制台创建高代码运行时，选择镜像；端口设为 8080，使用镜像默认启动命令，配置环境变量及平台鉴权。
@@ -160,26 +168,25 @@ Koo Search 使用官方 [SearchInKnowledgeRepo](https://support.huaweicloud.com/
 
    上例适用于运行时 API Key 鉴权；IAM 调用按平台签名规则处理。`request.json` 按上面的占位示例自行填写，不提交凭证。
 
-镜像只包含安装后的应用与依赖，原 HTML、JSONL、`io_spec.md`、`.env` 均不会进入构建上下文。容器无持久化状态。部署前需要已有 Koo Search 知识库及可用认证；本项目不负责导入文档或创建云资源。
+Dockerfile 使用 JDK 21 构建，再将可执行 JAR 放入 ARM64 JRE 21 镜像，以非 root 用户运行。镜像只包含 JRE、应用和依赖，原 HTML、JSONL、`io_spec.md`、`.env`、测试与本地客户端脚本均不会进入构建上下文。容器无持久化状态。部署前需要已有 Koo Search 知识库及可用认证；本项目不负责导入文档或创建云资源。默认 `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=70.0`，可按运行时资源规格覆盖。
 
 ## 验证与代码结构
 
 ```bash
-uv run --frozen pytest -q
-uv run --frozen ruff check src tests
-uv run --frozen ruff format --check src tests
+./mvnw verify
 ```
 
-测试使用 HTTP MockTransport 验证完整请求链及 ASGI/SSE 协议，不消耗真实模型额度。云端验收还需使用真实服务确认分类响应、检索分片、模型结果和 SSE 网关转发。
+JUnit 测试通过本机随机端口模拟分类、检索和模型服务，并使用 WebTestClient 验证 HTTP 入口；不读取 `.env` 或原始请求中的凭证，不消耗真实模型额度。覆盖三条路径、0.7 边界、配置透传、JSON 回退、SSE 分片、思考增量、超时、心跳及取消。云端验收还需使用真实服务确认分类响应、检索分片、模型结果和 SSE 网关转发。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/wenlv_agent/app.py` | AgentArts HTTP 入口、健康检查、连接池 |
-| `src/wenlv_agent/agent.py` | 三条业务路径与能力查询 |
-| `src/wenlv_agent/clients.py` | MobileNet、Koo Search、模型协议 |
-| `src/wenlv_agent/events.py` | SSE 事件、心跳、断开取消 |
-| `src/wenlv_agent/images.py` | 图片输入规范化 |
-| `src/wenlv_agent/prompts.py` | 文旅讲解提示词 |
-| `src/wenlv_agent/config.py`、`schemas.py` | 部署配置与请求契约 |
+| `src/main/java/com/heilos/travel/TravelApplication.java` | Spring Boot 启动、依赖注入、连接池 |
+| `AgentController.java` | AgentArts HTTP 入口、健康检查、请求体限制 |
+| `TravelAgent.java`、`Prompts.java` | 三条业务路径、Spring AI ChatClient、文旅提示词 |
+| `ExternalServices.java` | MobileNet 与 Koo Search HTTP 接口 |
+| `CompatibleChatModel.java`、`SseDecoder.java` | Spring AI ChatModel 适配、上游模型协议与分片解码 |
+| `WorkflowEvents.java` | SSE 事件、心跳及请求级状态 |
+| `ImageInput.java`、`Inputs.java`、`AgentSettings.java` | 图片处理、请求契约、环境配置 |
+| `src/test/java/com/heilos/travel/` | Java 自动化回归测试 |
 
 迁移决策见 [MIGRATION.md](MIGRATION.md)。原始资料保留原样。
