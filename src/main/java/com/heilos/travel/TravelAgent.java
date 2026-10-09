@@ -1,12 +1,12 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
-import tools.jackson.databind.JsonNode;
 
 final class TravelAgent {
   sealed interface Step permits Stage, Delta, Result {}

@@ -1,5 +1,6 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,12 +24,11 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import tools.jackson.databind.JsonNode;
 
 /**
- * Spring AI provider adapter for the existing full-URL and legacy proxy contracts. Unlike
- * OpenAiChatModel's cumulative metadata, reasoningContent here is a delta. Instances are
- * request-scoped: no shared mutable credentials or conversation state.
+ * Spring AI provider adapter for the existing full-URL and legacy proxy contracts. This adapter's
+ * reasoningContent metadata is an upstream delta. Instances are request-scoped: no shared mutable
+ * credentials or conversation state.
  */
 final class CompatibleChatModel implements ChatModel {
   static final String REASONING_DELTA = "reasoningContent";
@@ -43,7 +43,7 @@ final class CompatibleChatModel implements ChatModel {
   }
 
   @Override
-  public ChatOptions getOptions() {
+  public ChatOptions getDefaultOptions() {
     return ChatOptions.builder().model(config.model()).temperature(config.temperature()).build();
   }
 
@@ -74,7 +74,8 @@ final class CompatibleChatModel implements ChatModel {
               && !settings.modelAllowedHosts.contains(endpoint.getHost().toLowerCase(Locale.ROOT)))
             return Flux.error(new AgentException("400", "模型endpoint不在允许的主机列表中"));
           Map<String, Object> request = new LinkedHashMap<>();
-          ChatOptions options = prompt.getOptions() == null ? getOptions() : prompt.getOptions();
+          ChatOptions options =
+              prompt.getOptions() == null ? getDefaultOptions() : prompt.getOptions();
           request.put("model", options.getModel() == null ? config.model() : options.getModel());
           request.put("messages", messages(prompt));
           request.put(
@@ -210,12 +211,7 @@ final class CompatibleChatModel implements ChatModel {
 
   private static ChatResponse response(String text, String reasoning) {
     return new ChatResponse(
-        List.of(
-            new Generation(
-                AssistantMessage.builder()
-                    .content(text)
-                    .properties(Map.of(REASONING_DELTA, reasoning))
-                    .build())));
+        List.of(new Generation(new AssistantMessage(text, Map.of(REASONING_DELTA, reasoning)))));
   }
 
   private static final class StreamState {

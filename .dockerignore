@@ -3,7 +3,8 @@
 !pom.xml
 !mvnw
 !.mvn/
-!.mvn/**
+!.mvn/wrapper/
+!.mvn/wrapper/**
 !src/
 !src/main/
 !src/main/**

@@ -1,5 +1,6 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -12,7 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import tools.jackson.databind.JsonNode;
 
 final class ExternalServices {
   record Classification(String name, double confidence) {
@@ -21,7 +21,7 @@ final class ExternalServices {
     }
   }
 
-  record KnowledgeChunk(String content, String title, String subtitle, Double score) {}
+  record KnowledgeChunk(String content, String title, String subtitle) {}
 
   private enum Service {
     CLASSIFIER("图片分类服务", "500"),
@@ -84,6 +84,8 @@ final class ExternalServices {
   Mono<List<KnowledgeChunk>> search(String query, boolean image) {
     return Mono.defer(
         () -> {
+          if (settings.searchMode.equals("stub"))
+            return Mono.delay(Duration.ofMillis(150)).thenReturn(List.of());
           String repo = image ? settings.imageRepo : settings.textRepo;
           if (!AgentSettings.validId(repo))
             return Mono.error(new AgentException("E5004", "Koo Search知识库ID未配置或格式错误"));
@@ -131,12 +133,9 @@ final class ExternalServices {
         throw new AgentException("E5002", "知识检索分片格式错误");
       String content = doc.path("content").asText().strip();
       if (content.isEmpty()) continue;
-      JsonNode rawScore = doc.path("score");
-      Double score =
-          rawScore.isNumber() && Double.isFinite(rawScore.asDouble()) ? rawScore.asDouble() : null;
       chunks.add(
           new KnowledgeChunk(
-              content, doc.path("title").asText(""), doc.path("subtitle").asText(""), score));
+              content, doc.path("title").asText(""), doc.path("subtitle").asText("")));
     }
     return List.copyOf(chunks);
   }

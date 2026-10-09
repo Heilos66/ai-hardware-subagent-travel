@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send io_spec.md's JSON body to the local Agent; never print model credentials."""
+"""Send references/io_spec.md's JSON body to the local Agent without printing credentials."""
 
 import argparse
 import json
@@ -24,7 +24,10 @@ def read_request(path: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="本地测试 io_spec.md 请求体，实时显示 SSE")
     parser.add_argument(
-        "--spec", type=Path, default=Path(__file__).resolve().parents[1] / "io_spec.md"
+        "--spec",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "references" / "io_spec.md",
+        help="本地 IO 文档路径，默认 references/io_spec.md",
     )
     parser.add_argument("--port", type=int, default=8080, help="本机服务端口，默认 8080")
     parser.add_argument("--check", action="store_true", help="仅校验请求体，不发送请求或输出凭证")

@@ -10,7 +10,7 @@ import org.springframework.core.env.Environment;
 
 /** Uses the original environment variable names; never render this object in logs. */
 public final class AgentSettings {
-  final String searchUrl, searchEndpoint, projectId, applicationId, textRepo, imageRepo;
+  final String searchMode, searchUrl, searchEndpoint, projectId, applicationId, textRepo, imageRepo;
   final String appCode, searchToken, tokenFile, classifierUrl, classifierKey;
   final String workflowId, workflowName;
   final int topK, maxRequestBytes, maxImageBytes, maxContextChars;
@@ -20,8 +20,12 @@ public final class AgentSettings {
   final Set<String> modelAllowedHosts;
 
   public AgentSettings(Environment env) {
-    searchUrl = url(env, "KOOSEARCH_URL", "");
-    searchEndpoint = url(env, "KOOSEARCH_ENDPOINT", "");
+    searchMode = value(env, "KOOSEARCH_MODE", "stub").strip().toLowerCase(Locale.ROOT);
+    if (!Set.of("stub", "live").contains(searchMode))
+      throw new IllegalArgumentException("KOOSEARCH_MODE必须为stub或live");
+    // Unfinished knowledge configuration must not block the temporary stub workflow.
+    searchUrl = searchMode.equals("live") ? url(env, "KOOSEARCH_URL", "") : "";
+    searchEndpoint = searchMode.equals("live") ? url(env, "KOOSEARCH_ENDPOINT", "") : "";
     projectId = value(env, "KOOSEARCH_PROJECT_ID", "");
     applicationId = value(env, "KOOSEARCH_APPLICATION_ID", "");
     textRepo = value(env, "KOOSEARCH_TEXT_REPO_ID", "");
@@ -29,7 +33,7 @@ public final class AgentSettings {
     appCode = value(env, "KOOSEARCH_APPCODE", "");
     searchToken = value(env, "KOOSEARCH_TOKEN", "");
     tokenFile = value(env, "KOOSEARCH_TOKEN_FILE", "");
-    classifierUrl = url(env, "CLASSIFIER_URL", "http://1.95.68.165:16000/mobilenetv3large");
+    classifierUrl = url(env, "CLASSIFIER_URL", "http://1.95.152.66:16000/mobilenetv3large");
     classifierKey = value(env, "CLASSIFIER_API_KEY", "");
     topK = integer(env, "KOOSEARCH_TOP_K", 3, 50);
     maxRequestBytes = integer(env, "MAX_REQUEST_BYTES", 16 * 1024 * 1024, Integer.MAX_VALUE);

@@ -1,4 +1,5 @@
-# Build with: docker buildx build --platform linux/arm64 -t travel-agent:0.2.0 --load .
+# SWR Basic requires a Docker V2 manifest; avoid OCI indexes and attestations.
+# Build with: docker buildx build --platform linux/arm64 --provenance=false --sbom=false --output type=docker,oci-mediatypes=false -t travel-agent:0.2.0 .
 FROM eclipse-temurin:21-jdk-noble AS builder
 WORKDIR /build
 COPY mvnw pom.xml ./

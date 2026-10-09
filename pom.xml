@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.1.1</version>
+    <version>3.5.15</version>
     <relativePath/>
   </parent>
   <groupId>com.heilos</groupId>
@@ -15,7 +15,7 @@
   <description>AgentArts tourism agent using Spring AI</description>
   <properties>
     <java.version>21</java.version>
-    <spring-ai.version>2.0.1</spring-ai.version>
+    <spring-ai.version>1.0.9</spring-ai.version>
   </properties>
   <dependencyManagement>
     <dependencies>

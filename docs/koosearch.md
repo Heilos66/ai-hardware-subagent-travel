@@ -1,8 +1,8 @@
 # Koo Search 接口核实
 
-核实日期：2026-09-28。依据为华为云官方文档；未使用真实账号调用。
+接口核实日期：2026-09-28。当前默认 `KOOSEARCH_MODE=stub`；知识库确定并配置好后，切换 `live` 才会调用以下接口。真实 Koo Search 尚未联调。
 
-采用当前 `SearchInKnowledgeRepo`：`POST /v1/{project_id}/applications/{application_id}/uni-search/experience/searchtext`。正文发送 `repo_id`、`content`、`page_num=1`、`page_size=3`、`scope=doc`；从返回的 `doc_list` 读取分片正文、标题及可选评分。查询最长 1000 字符。可选 `search_threshold` 范围为 0～200，因此不直接沿用低代码的 0.3/0.1。[检索 API](https://support.huaweicloud.com/api-koosearch/SearchInKnowledgeRepo.html)
+采用当前 `SearchInKnowledgeRepo`：`POST /v1/{project_id}/applications/{application_id}/uni-search/experience/searchtext`。正文发送 `repo_id`、`content`、`page_num=1`、`page_size=3`、`scope=doc`；从返回的 `doc_list` 读取分片正文、标题和副标题。查询最长 1000 字符。可选 `search_threshold` 范围为 0～200，因此不直接沿用低代码的 0.3/0.1。[检索 API](https://support.huaweicloud.com/api-koosearch/SearchInKnowledgeRepo.html)
 
 认证支持项目级 IAM Token（`X-Auth-Token`）和 APP 简易认证（`X-Apig-AppCode`）。本项目两种均支持，优先 AppCode。Token 模式由部署环境在过期前更新，支持按请求读取挂载文件，不内置用户密码登录。[Koo Search 鉴权](https://support.huaweicloud.com/api-koosearch/koosearch_06_0009.html)
 

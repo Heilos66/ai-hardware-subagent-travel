@@ -1,5 +1,6 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -8,7 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
-import tools.jackson.databind.JsonNode;
+import reactor.core.publisher.SignalType;
 
 final class WorkflowEvents {
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowEvents.class);
@@ -23,19 +24,21 @@ final class WorkflowEvents {
   Flux<String> stream(JsonNode payload) {
     return Flux.defer(
         () -> {
-          State state = new State();
+          State state = new State(settings.searchMode);
           Flux<String> body =
               agent
                   .run(payload)
                   .<String>handle(
                       (step, sink) -> {
-                        if (step instanceof TravelAgent.Result result)
+                        if (step instanceof TravelAgent.Result result) {
                           state.result = result.content();
-                        else {
+                          state.timing.finishStage("succeeded");
+                        } else {
                           state.index++;
                           if (step instanceof TravelAgent.Delta delta)
                             sink.next(message(delta.text(), delta.reasoning(), state.index));
                           else if (step instanceof TravelAgent.Stage stage) {
+                            state.timing.startStage(stage.id());
                             Map<String, Object> data = new LinkedHashMap<>();
                             data.put("agent_id", settings.workflowId);
                             data.put("node_id", stage.id());
@@ -55,6 +58,7 @@ final class WorkflowEvents {
                   .onErrorResume(
                       error -> {
                         state.failed = true;
+                        state.timing.finishStage("failed");
                         if (error instanceof AgentException known) state.result = known.result();
                         else {
                           // Never log exception text, URLs, prompts, or stack traces with
@@ -68,11 +72,19 @@ final class WorkflowEvents {
                         return Flux.empty();
                       });
           return withHeartbeat(
-              Flux.concat(
-                  Flux.just(event("workflow_started", Map.of("start_time", state.start))),
-                  body,
-                  Flux.defer(() -> finish(state))),
-              settings.heartbeat);
+                  Flux.concat(
+                      Flux.just(event("workflow_started", Map.of("start_time", state.start))),
+                      body,
+                      Flux.defer(() -> finish(state))),
+                  settings.heartbeat)
+              .doFinally(
+                  signal ->
+                      state.timing.finish(
+                          signal == SignalType.CANCEL
+                              ? "cancelled"
+                              : state.failed || signal == SignalType.ON_ERROR
+                                  ? "failed"
+                                  : "succeeded"));
         });
   }
 
@@ -163,8 +175,13 @@ final class WorkflowEvents {
   private static final class State {
     final String executionId = UUID.randomUUID().toString();
     final long start = System.currentTimeMillis();
+    final WorkflowTiming timing;
     int index;
     boolean failed;
     Map<String, Object> result;
+
+    State(String searchMode) {
+      timing = new WorkflowTiming(executionId, searchMode);
+    }
   }
 }

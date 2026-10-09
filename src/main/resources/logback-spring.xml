@@ -1,0 +1,16 @@
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+  <appender name="TIMING_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>8192</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <!-- A slow/full log sink must not hold up the reactive request pipeline. -->
+    <neverBlock>true</neverBlock>
+    <maxFlushTime>1000</maxFlushTime>
+    <appender-ref ref="CONSOLE"/>
+  </appender>
+  <logger name="com.heilos.travel.WorkflowTiming" level="INFO" additivity="false">
+    <appender-ref ref="TIMING_ASYNC"/>
+  </logger>
+  <root level="INFO"><appender-ref ref="CONSOLE"/></root>
+</configuration>

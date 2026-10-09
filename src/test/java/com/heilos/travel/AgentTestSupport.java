@@ -1,5 +1,6 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -17,7 +18,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
-import tools.jackson.databind.JsonNode;
 
 abstract class AgentTestSupport {
   record Captured(String uri, Map<String, String> headers, JsonNode body) {}
@@ -90,6 +90,7 @@ abstract class AgentTestSupport {
   AgentSettings settings(Map<String, String> overrides) {
     MockEnvironment env =
         new MockEnvironment()
+            .withProperty("KOOSEARCH_MODE", "live")
             .withProperty("KOOSEARCH_URL", base + "/search")
             .withProperty("KOOSEARCH_TEXT_REPO_ID", "text-repo")
             .withProperty("KOOSEARCH_IMAGE_REPO_ID", "image-repo")

@@ -1,9 +1,11 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import java.io.IOException;
 import java.util.Map;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 final class Json {
   static final JsonMapper MAPPER =
@@ -12,15 +14,28 @@ final class Json {
   private Json() {}
 
   static JsonNode parse(String value) {
-    return MAPPER.readTree(value);
+    try {
+      return MAPPER.readTree(value);
+    } catch (JsonProcessingException e) {
+      // Parser diagnostics may contain request data or credentials.
+      throw new IllegalArgumentException("Invalid JSON");
+    }
   }
 
   static JsonNode parse(byte[] value) {
-    return MAPPER.readTree(value);
+    try {
+      return MAPPER.readTree(value);
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Invalid JSON");
+    }
   }
 
   static String write(Object value) {
-    return MAPPER.writeValueAsString(value);
+    try {
+      return MAPPER.writeValueAsString(value);
+    } catch (JsonProcessingException e) {
+      throw new IllegalArgumentException("JSON serialization failed");
+    }
   }
 
   @SuppressWarnings("unchecked")

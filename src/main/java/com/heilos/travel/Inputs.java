@@ -1,10 +1,10 @@
 package com.heilos.travel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import tools.jackson.databind.JsonNode;
 
 record Inputs(
     String query, List<String> imageUrls, List<String> imageBase64, List<ModelConfig> models) {

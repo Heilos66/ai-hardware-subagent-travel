@@ -1,18 +1,14 @@
-.venv/
 .DS_Store
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.ruff_cache/
 .env
 .env.*
 !.env.example
-dist/
-*.egg-info/
 target/
 .idea/
 *.iml
 .mvn/wrapper/maven-wrapper.jar
 # Original reference files include credentials; keep them local.
+/references/
 io_spec.md
 workflow_*.jsonl
