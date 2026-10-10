@@ -18,7 +18,9 @@ public class TravelApplication {
 
   @Bean
   AgentSettings settings(Environment environment) {
-    return new AgentSettings(environment);
+    AgentSettings settings = new AgentSettings(environment);
+    new WorkflowDiagnostics(settings).runtimeConfig();
+    return settings;
   }
 
   @Bean(destroyMethod = "dispose")

@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
@@ -20,54 +21,64 @@ import reactor.util.retry.Retry;
 final class RagFlowClient {
   private final WebClient http;
   private final AgentSettings.RagFlow settings;
+  private final WorkflowDiagnostics diagnostics;
 
-  RagFlowClient(WebClient http, AgentSettings.RagFlow settings) {
+  RagFlowClient(WebClient http, AgentSettings settings) {
     this.http = http;
-    this.settings = settings;
+    this.settings = settings.ragflow;
+    this.diagnostics = new WorkflowDiagnostics(settings);
   }
 
   Mono<List<ExternalServices.KnowledgeChunk>> search(String query) {
-    return Mono.defer(
-            () -> {
-              if (settings.url().isEmpty() || !AgentSettings.validId(settings.datasetId()))
-                return Mono.error(new AgentException("E5004", "RAGFlow地址或知识库ID未配置"));
-              if (query.isBlank() || Json.length(query) > 1000)
-                return Mono.error(new AgentException("400", "检索内容必须为1至1000个字符"));
-              Map<String, Object> body = new LinkedHashMap<>();
-              body.put("dataset_ids", List.of(settings.datasetId()));
-              body.put("question", query);
-              body.put("page", 1);
-              body.put("page_size", settings.topK());
-              body.put("similarity_threshold", settings.threshold());
-              if (!settings.rerankId().isEmpty()) body.put("rerank_id", settings.rerankId());
-              // Leave keyword/vector weights at server defaults; keyword=false is not vector-only.
-              return token()
-                  .flatMap(
-                      token ->
-                          request(body, token)
-                              .retryWhen(
-                                  Retry.backoff(settings.retries(), Duration.ofMillis(100))
-                                      .maxBackoff(Duration.ofMillis(500))
-                                      .jitter(0)
-                                      .filter(
-                                          error ->
-                                              error instanceof RetryableStatus
-                                                  || error instanceof WebClientRequestException)
-                                      .onRetryExhaustedThrow((spec, signal) -> signal.failure())))
-                  .map(this::chunks);
-            })
-        // One deadline covers credential loading, all attempts, and retry delays.
-        .timeout(settings.timeout())
-        .onErrorMap(
-            error -> {
-              if (error instanceof AgentException) return error;
-              if (error instanceof RetryableStatus status) return httpError(status.status);
-              return new AgentException(
-                  "E5002",
-                  error instanceof TimeoutException
-                      ? "RAGFlow知识检索调用超时"
-                      : "RAGFlow知识检索连接失败或响应格式错误");
-            });
+    return Mono.deferContextual(context -> {
+      AtomicInteger attempts = new AtomicInteger();
+      return Mono.defer(
+              () -> {
+                if (settings.url().isEmpty())
+                  return Mono.error(new AgentException("E5004", "RAGFlow地址未配置：RAGFLOW_URL"));
+                if (settings.datasetId().isEmpty())
+                  return Mono.error(new AgentException("E5004", "RAGFlow知识库ID未配置：RAGFLOW_DATASET_ID"));
+                if (!AgentSettings.validId(settings.datasetId()))
+                  return Mono.error(new AgentException("E5004", "RAGFlow知识库ID格式错误：RAGFLOW_DATASET_ID"));
+                if (query.isBlank() || Json.length(query) > 1000)
+                  return Mono.error(new AgentException("400", "检索内容必须为1至1000个字符"));
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("dataset_ids", List.of(settings.datasetId()));
+                body.put("question", query);
+                body.put("page", 1);
+                body.put("page_size", settings.topK());
+                body.put("similarity_threshold", settings.threshold());
+                if (!settings.rerankId().isEmpty()) body.put("rerank_id", settings.rerankId());
+                // Leave keyword/vector weights at server defaults; keyword=false is not vector-only.
+                return token().flatMap(token ->
+                    Mono.defer(() -> {
+                      attempts.incrementAndGet();
+                      return request(body, token);
+                    })
+                        .retryWhen(
+                            Retry.backoff(settings.retries(), Duration.ofMillis(100))
+                                .maxBackoff(Duration.ofMillis(500))
+                                .jitter(0)
+                                .filter(error -> error instanceof RetryableStatus
+                                    || error instanceof WebClientRequestException)
+                                .onRetryExhaustedThrow((spec, signal) -> signal.failure()))
+                        .map(response -> {
+                          var chunks = chunks(response);
+                          diagnostics.retrievalResult(context, query, response.path("data").path("chunks"),
+                              chunks, attempts.get(), token);
+                          return chunks;
+                        }));
+              })
+          // One deadline covers credential loading, all attempts, and retry delays.
+          .timeout(settings.timeout())
+          .onErrorMap(error -> {
+            if (error instanceof AgentException) return error;
+            if (error instanceof RetryableStatus status) return httpError(status.status);
+            return new AgentException("E5002", error instanceof TimeoutException
+                ? "RAGFlow知识检索调用超时" : "RAGFlow知识检索连接失败或响应格式错误");
+          })
+          .doOnError(error -> diagnostics.retrievalFailure(context, attempts.get(), error));
+    });
   }
 
   private Mono<String> token() {
@@ -127,7 +138,8 @@ final class RagFlowClient {
       if (content.isEmpty() || score.doubleValue() < settings.minSimilarity()) continue;
       result.add(
           new ExternalServices.KnowledgeChunk(
-              content, chunk.path("document_keyword").asText("")));
+              content, chunk.path("document_keyword").asText(""),
+              chunk.path("id").asText(""), score.doubleValue()));
       if (result.size() == settings.topK()) break;
     }
     return List.copyOf(result);

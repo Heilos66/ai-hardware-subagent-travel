@@ -17,6 +17,8 @@ public final class AgentSettings {
   final Duration classifierTimeout, modelTimeout, heartbeat;
   final Set<String> modelAllowedHosts;
   final RagFlow ragflow;
+  final boolean ragflowLogContent, modelLogRequest;
+  final int diagnosticLogMaxChars;
 
   record RagFlow(
       String url,
@@ -48,6 +50,9 @@ public final class AgentSettings {
             number(env, "RAGFLOW_MIN_SIMILARITY", .3, 0, 1),
             duration(env, "RAGFLOW_TIMEOUT", 10, 300),
             integer(env, "RAGFLOW_RETRIES", 2, 0, 2));
+    ragflowLogContent = bool(env, "RAGFLOW_LOG_CONTENT", false);
+    modelLogRequest = bool(env, "MODEL_LOG_REQUEST", false);
+    diagnosticLogMaxChars = integer(env, "DIAGNOSTIC_LOG_MAX_CHARS", 16000, 256, 65536);
     classifierUrl = url(env, "CLASSIFIER_URL", "http://1.95.152.66:16000/mobilenetv3large");
     classifierKey = value(env, "CLASSIFIER_API_KEY", "");
     maxRequestBytes = integer(env, "MAX_REQUEST_BYTES", 16 * 1024 * 1024, Integer.MAX_VALUE);
@@ -99,6 +104,14 @@ public final class AgentSettings {
     String value = value(env, name, fallback).strip();
     if (!value.isEmpty()) httpUri(value);
     return value;
+  }
+
+  private static boolean bool(Environment env, String name, boolean fallback) {
+    return switch (value(env, name, Boolean.toString(fallback)).strip().toLowerCase(Locale.ROOT)) {
+      case "true" -> true;
+      case "false" -> false;
+      default -> throw new IllegalArgumentException("配置必须为true或false：" + name);
+    };
   }
 
   private static double number(

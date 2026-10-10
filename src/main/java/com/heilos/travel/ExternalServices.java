@@ -15,7 +15,7 @@ final class ExternalServices {
     }
   }
 
-  record KnowledgeChunk(String content, String title) {}
+  record KnowledgeChunk(String content, String title, String id, double similarity) {}
 
   private final WebClient http;
   private final AgentSettings settings;
@@ -24,7 +24,7 @@ final class ExternalServices {
   ExternalServices(WebClient http, AgentSettings settings) {
     this.http = http;
     this.settings = settings;
-    this.ragflow = new RagFlowClient(http, settings.ragflow);
+    this.ragflow = new RagFlowClient(http, settings);
   }
 
   Mono<Classification> classify(ImageInput image) {

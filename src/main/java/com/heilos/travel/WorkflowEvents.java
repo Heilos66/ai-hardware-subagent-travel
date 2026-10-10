@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,7 +85,10 @@ final class WorkflowEvents {
                               ? "cancelled"
                               : state.failed || signal == SignalType.ON_ERROR
                                   ? "failed"
-                                  : "succeeded"));
+                                  : "succeeded"))
+              .contextWrite(context -> context
+                  .put(WorkflowDiagnostics.EXECUTION_ID, state.executionId)
+                  .put(WorkflowDiagnostics.SECRETS, ConcurrentHashMap.<String>newKeySet()));
         });
   }
 

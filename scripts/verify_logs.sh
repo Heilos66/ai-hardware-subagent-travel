@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local workflow timing verification. Compatible with macOS Bash 3.2.
+# Local workflow timing and diagnostics verification. Compatible with macOS Bash 3.2.
 set -euo pipefail
 
 TRAVEL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,8 +13,8 @@ usage() {
   capabilities [端口]       查询能力；应有 validate、total 两条成功日志
   request [端口] [IO文件]   发送 IO 请求，按业务分支调用真实分类器、RAGFlow 和模型
   failure [端口]            发送非法 operation；应有 validate、total 两条失败日志
-  logs [execution_id]       查看全部或指定请求的耗时日志
-  test [Maven参数...]       运行 WorkflowTimingTest，无需真实业务凭据
+  logs [execution_id]       查看全部或指定请求的耗时和检索/模型诊断日志
+  test [Maven参数...]       运行耗时和诊断日志测试，无需真实业务凭据
   build [Maven参数...]      重新构建 JAR（跳过测试，可先执行 test）
   help                     显示帮助
 
@@ -35,6 +35,8 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
   高置信度图片：validate → classify → search_image → model → total
   低置信度图片：validate → classify → model → total
   检索记录实际调用耗时（包含重试与提示词准备），同次请求 execution_id 相同。
+  ragflow_result 的 kept_chunks/empty_result 区分有资料与空结果，ragflow_failed 记录失败原因。
+  .env 设置 RAGFLOW_LOG_CONTENT=true、MODEL_LOG_REQUEST=true 后重启，可查看脱敏正文和请求体。
   start 使用真实 RAGFlow；无知识库网络或凭据时，仍可执行 capabilities 和 failure。
   请求尚未结束时在客户端按 Ctrl+C，可检查当前阶段及 total 的 cancelled 日志。
   start 终端按 Ctrl+C 停止服务。代码变更后先 build，再重启 start。
@@ -164,9 +166,9 @@ PY
     (( $# <= 1 )) || die '用法：verify_logs.sh logs [execution_id]'
     [[ -f "$log_file" ]] || die "日志不存在，请先执行 start：$log_file"
     if command -v rg >/dev/null 2>&1; then
-      matches="$(rg --no-heading --color never 'workflow_timing ' "$log_file" || true)"
+      matches="$(rg --no-heading --color never 'workflow_(timing|diagnostic) ' "$log_file" || true)"
     else
-      matches="$(grep 'workflow_timing ' "$log_file" || true)"
+      matches="$(grep -E 'workflow_(timing|diagnostic) ' "$log_file" || true)"
     fi
     if [[ -n "${1:-}" ]]; then
       matches="$(printf '%s\n' "$matches" | grep -F -- " execution_id=$1 " || true)"
@@ -174,7 +176,7 @@ PY
     if [[ -n "$matches" ]]; then
       printf '%s\n' "$matches"
     else
-      printf '尚无匹配的耗时日志；请先发送请求，异步日志可能稍晚到达。\n'
+      printf '尚无匹配的耗时或诊断日志；请先发送请求，异步日志可能稍晚到达。\n'
     fi
     ;;
   test|build)
@@ -184,7 +186,7 @@ PY
       maven_args+=("-Dmaven.repo.local=$MAVEN_REPO_LOCAL")
     fi
     if [[ "$command_name" == test ]]; then
-      ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest "$@" test
+      ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest,WorkflowDiagnosticsTest "$@" test
     else
       ./mvnw "${maven_args[@]}" -DskipTests "$@" package
     fi

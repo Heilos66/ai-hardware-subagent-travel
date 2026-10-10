@@ -45,7 +45,7 @@ test -f .env || cp .env.example .env
 ./scripts/verify_logs.sh capabilities  # 无需外部服务
 ./scripts/verify_logs.sh failure       # 预期业务错误
 ./scripts/verify_logs.sh request       # 使用本地 IO 示例，按分支调用分类器/RAGFlow/模型
-./scripts/verify_logs.sh logs          # 查看耗时
+./scripts/verify_logs.sh logs          # 查看耗时与检索/模型诊断
 ./scripts/verify_logs.sh logs 实际execution_id
 ```
 
@@ -75,6 +75,8 @@ java -jar target/travel-agent.jar
 | `RAGFLOW_API_TOKEN_FILE` | 可选挂载文件，优先于 Token 环境变量，每次查询重读 |
 | `RAGFLOW_TOP_K/SIMILARITY_THRESHOLD/MIN_SIMILARITY` | 默认取 3 条，服务端阈值 0.2，客户端过滤低于 0.3 的片段 |
 | `RAGFLOW_TIMEOUT/RETRIES` | 整次检索默认 10 秒，连接异常或 HTTP 408/429/5xx 最多重试 2 次 |
+| `RAGFLOW_LOG_CONTENT/MODEL_LOG_REQUEST` | 默认 false；按需记录检索片段正文 / 最终模型请求体 |
+| `DIAGNOSTIC_LOG_MAX_CHARS` | 诊断 JSON 超过此字符数时改为截断预览；默认 16000，范围 256～65536 |
 | `CLASSIFIER_TIMEOUT/MODEL_TIMEOUT` | 分类器 / 模型整次调用超时，默认 30/60 秒 |
 | `MODEL_ALLOWED_HOSTS` | 可选的模型目标主机限制，逗号分隔 |
 | `MAX_REQUEST_BYTES/MAX_IMAGE_BYTES/MAX_CONTEXT_CHARS` | 默认 16MiB / 10MiB / 16000 字符 |
@@ -129,7 +131,11 @@ SSE 顺序为 workflow_started、node_started、message、workflow_finished、en
 
 ## 阶段耗时日志
 
-每个实际阶段结束后输出 workflow_timing，包含 execution_id、stage、status、elapsed_ms、search_mode。按 execution_id 关联 SSE 与日志；total 为服务端工作流总耗时。所有耗时记录为 INFO，失败/取消分别用 status=failed/cancelled 表示。日志异步输出，队列满时丢弃以避免阻塞业务线程，不记录请求正文或凭据。
+每个实际阶段结束后输出 workflow_timing，包含 execution_id、stage、status、elapsed_ms、search_mode。按 execution_id 关联 SSE 与日志；total 为服务端工作流总耗时。所有耗时记录为 INFO，失败/取消分别用 status=failed/cancelled 表示。
+
+workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成功/失败、返回和保留数量、文档名及相似度，不记录正文。设置 `RAGFLOW_LOG_CONTENT=true` 可查看原始检索片段，`MODEL_LOG_REQUEST=true` 可查看包含最终知识上下文的模型请求体。日志会隐藏已知凭据字段/值和图片数据，限制正文长度；详见 [诊断日志](docs/logging.md#检索与模型请求诊断日志)。环境变量变更后重启服务；AgentArts 需发布配置并调用对应版本。
+
+耗时和诊断各自异步输出，队列满时丢弃以避免日志写入阻塞业务线程。诊断序列化和脱敏仍有处理开销，正文开关默认关闭。
 
 日志阶段和本地验证见 [验证指南](docs/verification.md)，云端保存和查看见 [日志说明](docs/logging.md)。本地日志文件不会随镜像上传；云端需独立开启日志上报并验证采集。
 
@@ -138,8 +144,8 @@ SSE 顺序为 workflow_started、node_started、message、workflow_finished、en
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 154 项回归
-./scripts/verify_logs.sh test       # 日志/占位专项测试
+./mvnw verify                       # 全部 177 项回归
+./scripts/verify_logs.sh test       # 耗时与诊断日志专项测试
 ```
 
 测试使用本机模拟服务，不消耗真实模型额度。Spring AI 的 ChatClient 通过自定义 CompatibleChatModel 处理现有两类模型协议和增量语义；MobileNet、RAGFlow、阶段日志及取消传播均有回归覆盖。RAGFlow 的空结果正常进入模型，HTTP/业务/格式错误返回 E5002，配置缺失返回 E5004；不把检索故障当作无资料。无需外部服务时可执行能力查询、输入错误验证或自动化测试。

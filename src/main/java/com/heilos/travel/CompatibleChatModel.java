@@ -66,8 +66,8 @@ final class CompatibleChatModel implements ChatModel {
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(
-        () -> {
+    return Flux.deferContextual(
+        context -> {
           long deadline = System.nanoTime() + settings.modelTimeout.toNanos();
           URI endpoint = config.endpoint();
           if (!settings.modelAllowedHosts.isEmpty()
@@ -110,6 +110,7 @@ final class CompatibleChatModel implements ChatModel {
                 config.token().toLowerCase(Locale.ROOT).startsWith("bearer ")
                     ? config.token()
                     : "Bearer " + config.token());
+          new WorkflowDiagnostics(settings).modelRequest(context, config, body);
           return call.bodyValue(body)
               .exchangeToFlux(
                   reply -> {

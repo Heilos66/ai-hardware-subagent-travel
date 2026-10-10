@@ -20,7 +20,7 @@
 
 ## 当前文旅 Java 工程如何对应
 
-应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing`，没有配置文件 Appender 或在请求线程里调用 LTS API。队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/heilos/travel/WorkflowTiming.java)
+应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing` 和 `workflow_diagnostic`，没有配置文件 Appender 或在请求线程里调用 LTS API。两类日志使用独立队列，队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/heilos/travel/WorkflowTiming.java)、[代码：WorkflowDiagnostics.java](../src/main/java/com/heilos/travel/WorkflowDiagnostics.java)
 
 建议先使用平台内置日志上报完成验收，暂不为此引入额外 SDK。**文档明确确认运行时日志会进入 LTS，但本次没有云端样本证明当前镜像的 stdout 已被收录，也没有找到任意自定义日志文件均会自动采集的承诺。**保留现有控制台输出，并按以下过程核验平台采集结果；若只有平台日志而没有应用打点，再核对目标版本、采集范围和过滤规则。
 
@@ -44,6 +44,59 @@
 本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。为保持日志字段兼容，`search_mode` 固定为 `ragflow`；检索阶段记录读取 Token 文件、HTTP 请求、重试及提示词准备的实际耗时。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
 
 截至本次调研，运行时观测指南仍注明托管智能体的 Trace/Metric 查看功能未开放，而 API 结构里已经存在相应配置字段。因此不能仅凭开了日志开关或 API 中有字段，就认定会自动出现分类/检索/模型的链路图、P95 或 Token 图表；本项目当前提供的是日志打点，可在 LTS 另外分析。[运行时观测指南](https://support.huaweicloud.com/ops-agentarts/agentarts_14_0006.html)、[运行时 API 配置字段](https://support.huaweicloud.com/api-agentarts/ShowCoreRuntime.html)
+
+## 检索与模型请求诊断日志
+
+2026-10-10 新增。搜索 `workflow_diagnostic`，再按 SSE 返回的 `execution_id` 关联同一次请求；这些记录也都是 INFO 级别。启动配置摘要没有请求，使用 `execution_id=none`。
+
+| event | 默认记录 | 如何理解 |
+| --- | --- | --- |
+| `ragflow_config` | 地址/知识库 ID 是否已配置、ID 是否有效、Token 来源及正文开关状态 | 每次应用启动一次；不打印地址、ID 或 Token 的实际值 |
+| `ragflow_result` | succeeded、attempts、returned_chunks、kept_chunks、empty_result、保留片段的 ID/文档名/相似度/字符数 | 检索协议解析成功；kept_chunks=0 仍是成功的空结果，模型会使用无资料提示 |
+| `ragflow_failed` | failed、attempts、业务错误码、经过处理的错误原因和配置存在标记 | 与“没有命中”区分；不打印上游错误正文 |
+| `ragflow_content` | 默认关闭；开启后记录 question 和 RAGFlow 返回的 chunks | 包含客户端过滤前的片段，用于排查低分或空白片段被过滤 |
+| `model_request` | model、type、provider、stream、body_logged | 默认只记录摘要；开启后附加最终请求 body。记录发生在调用前，不代表模型调用已成功 |
+
+本地在 `.env`、云端在 AgentArts **运行时环境变量**中设置，重新启动相应服务/实例后生效：
+
+```dotenv
+RAGFLOW_LOG_CONTENT=true
+MODEL_LOG_REQUEST=true
+DIAGNOSTIC_LOG_MAX_CHARS=16000
+```
+
+两个正文开关默认 false。`DIAGNOSTIC_LOG_MAX_CHARS` 范围为 256～65536，作用于每个事件的脱敏 JSON 数据；超出时 `truncated=true`，data 改为 `{original_chars, preview}`，preview 最多为指定字符数。外层 JSON 转义和日志前缀不计入这个限额。日志始终为单行有效 JSON，实际检索结果、模型请求和 SSE 不受日志截断影响。
+
+`ragflow_content` 是原始检索片段，`ragflow_result.selected` 是按相似度、非空正文和 Top K 筛选后的片段。最终模型上下文还受 `MAX_CONTEXT_CHARS` 限制，因此要确认模型实际携带的知识，应查看 `model_request.data.body.messages`；代理协议查看 `body.model_request.messages`。其中能看到 system/user 消息、stream=true 及透传的思考选项。
+
+模型日志取自 HTTP 调用使用的同一请求体，对副本脱敏，不改变发出的请求：已知鉴权字段和本次使用的凭据值替换为 `<REDACTED>`，图片 URL/Base64 替换为 `<IMAGE_OMITTED>`。请求头不记录。正文仍可能包含用户问题、系统提示及知识库内容，开关只在需要查看这些内容时启用，排查结束可关闭。正文序列化有处理开销，异步输出只避免日志写入阻塞；日志故障不应改变业务结果。
+
+以下为检索成功的示意日志，并非线上实测结果：
+
+```text
+workflow_diagnostic execution_id=example event=ragflow_result truncated=false data={"status":"succeeded","attempts":1,"returned_chunks":3,"kept_chunks":1,"empty_result":false,"selected":[{"id":"chunk-1","document":"展品介绍","similarity":0.88,"content_chars":120}]}
+```
+
+本地查看：`./scripts/verify_logs.sh logs 实际execution_id` 同时筛选耗时和诊断日志。云端在已采集应用控制台输出的日志流中，搜索 `workflow_diagnostic` 和请求 ID；与 `workflow_timing` 配合判断检索与模型阶段是否完成。异步队列可能丢日志，不能仅凭缺少某条记录断定阶段未执行。
+
+## RAGFlow 地址或知识库 ID 未配置
+
+本次报错环境为 AgentArts，已确认没有配置相关运行时环境变量。旧版这条错误在代码发起 RAGFlow HTTP 请求之前产生：URL 为空，或知识库 ID 为空/格式无效；因此它并不说明知识库网络或服务报错。新版已将错误分别改为缺少 `RAGFLOW_URL`、缺少 `RAGFLOW_DATASET_ID`、`RAGFLOW_DATASET_ID` 格式错误。
+
+在目标 AgentArts 运行时配置以下变量，无需写入代码或业务请求体：
+
+```dotenv
+RAGFLOW_URL=http://172.16.0.154:9380/api/v1/retrieval
+RAGFLOW_DATASET_ID=e611c8e0c45111f19cb7ff060c22c24e
+RAGFLOW_API_TOKEN=替换为实际RAGFlowToken
+RAGFLOW_RERANK_ID=bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible
+```
+
+前 3 项必需；如使用 `RAGFLOW_API_TOKEN_FILE` 挂载文件，可替代 Token 环境变量。rerank 与接入文档一致，未配置时不发送该字段。`.env` 和文档中的地址不会自动成为运行时配置：`.env` 被排除在 Git 和镜像之外，应用也不会自动加载它，本地是启动脚本负责加载。
+
+保存环境配置并发布/切换目标运行时版本后，用新的 Session ID 调用。修复缺失变量本身无需修改代码或重建原 RAGFlow 镜像；要看到本次新增诊断日志，需要另外部署包含这些改动的新镜像。在新版本启动日志核对 `url_configured=true`、`dataset_id_configured=true`、`dataset_id_valid=true`、`token_source=environment/file`。这仅证明配置存在，Token 是否有效和私网是否可达仍需实际检索验证。
+
+若 `ragflow_failed` 中 `attempts=0` 且配置标记为 false，先修复配置；有请求尝试后再按 HTTP 状态或超时错误排查鉴权/网络。运行时需能访问 `172.16.0.154:9380`，网络说明见 [知识库网络文档](agentarts-knowledge-network.md)。
 
 ## LTS 如何保存日志
 

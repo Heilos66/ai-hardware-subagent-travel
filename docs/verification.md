@@ -10,7 +10,7 @@
 ./mvnw verify
 ```
 
-预期 `BUILD SUCCESS`，154 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消及日志隔离；40 项 RAGFlow 专项用例覆盖检索协议、片段过滤、错误、重试总时限、取消和 Token 文件轮换。
+预期 `BUILD SUCCESS`，177 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消及日志隔离；40 项 RAGFlow 专项用例覆盖检索协议、片段过滤、错误、重试总时限、取消和 Token 文件轮换。另有 4 项配置回归和 19 项诊断用例，验证缺失变量定位、结果与空结果区分、实际模型请求体、凭据/图片脱敏、日志截断、并发请求关联和日志失败隔离。
 
 仅检查日志相关改动可以执行 `./scripts/verify_logs.sh test`。Maven 可通过 `MAVEN_USER_HOME` 和 `MAVEN_REPO_LOCAL` 指定缓存目录，缓存齐全时使用 `test -o` / `build -o`。
 
@@ -41,6 +41,12 @@
 5. 文本为 `validate → search_text → model → total`；高置信度且名称非空的图片增加 classify/search_image；视觉分支为 `validate → classify → model → total`。
 
 能力查询只产生 validate、total。`failure` 故意发送非法 operation，收到预期业务错误时脚本返回 0。日志在 `target/local-logs/application.log`，按需执行 `logs 实际execution_id`。各阶段计时范围和云端查询见 [日志说明](logging.md)。在启动终端按 Ctrl+C 停止服务。
+
+检索诊断验证：在 `.env` 设置 `RAGFLOW_LOG_CONTENT=true`、`MODEL_LOG_REQUEST=true` 后重启。发送一次文本或高置信度图片请求，按同一 execution_id 找 `ragflow_result`、`ragflow_content` 和 `model_request`：比对返回/保留数量、片段正文和 `body.messages` 中的知识上下文（代理协议为 `body.model_request.messages`）。`truncated=true` 时看到的是预览，可将 `DIAGNOSTIC_LOG_MAX_CHARS` 调高到最多 65536 后重新调用；实际发出的请求不受日志截断影响。视觉分支不检索，只有 model_request。验证完可关闭两个正文开关并重启。
+
+若 AgentArts 返回“RAGFlow地址或知识库ID未配置”，先按 [配置排查](logging.md#ragflow-地址或知识库-id-未配置) 补齐运行时环境变量。新版本在启动日志 `ragflow_config` 和失败日志 `ragflow_failed` 输出配置是否存在；`attempts=0` 表示尚未请求 RAGFlow，不能按网络或知识库服务异常处理。
+
+2026-10-10 诊断改动已通过全部 177 项 Java 回归；最后的日志故障隔离调整另行通过 23 项配置/诊断回归并重新打包。最终 JAR 使用本机模拟 RAGFlow 与模型启动，分别验证缺少配置和配置正确两种场景：健康接口、SSE、真实 Logback 异步控制台输出、execution_id 关联及脚本筛选均通过，日志中的模型请求体与模拟服务实际收到的请求一致。本次诊断改动尚未构建或发布新镜像，也未修改 AgentArts 环境变量。
 
 ## IAM 运行时验证
 
@@ -131,7 +137,7 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
 ### RAGFlow 接入验证（2026-10-10）
 
-依据本地 `ragflow-travel-agent-integration.md`，已实现异步检索接入，知识检索统一使用 RAGFlow，本地 .env 和环境模板仅保留所需配置。154 项 Java 测试全部通过，JAR 构建成功；未发布新镜像或修改 AgentArts 运行时。真实 API 的前置验证与接入后复测均未收到 HTTP 响应，不能将模拟测试通过视为知识库验收通过。
+依据本地 `ragflow-travel-agent-integration.md`，已实现异步检索接入，知识检索统一使用 RAGFlow，本地 .env 和环境模板仅保留所需配置。初次接入时 154 项 Java 测试全部通过，JAR 构建成功；后续已推送 RAGFlow 镜像 `swr.cn-southwest-2.myhuaweicloud.com/asr-test2/travel-agent:ragflow-20261010-1556-3cff43e`，它不包含本次新增诊断日志。真实 API 的前置验证与接入后复测均未收到 HTTP 响应，不能将模拟测试通过视为知识库验收通过。
 
 | 检查 | 本机实测结果 |
 | --- | --- |
