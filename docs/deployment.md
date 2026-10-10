@@ -66,6 +66,35 @@ curl -N "${AGENTARTS_GATEWAY}/runtimes/${RUNTIME_NAME}/invocations?endpoint=Late
 
 IAM 模式按平台签名规则调用。Session ID 是平台会话标识，不等于模型历史记录；本应用保持单轮问答。发布后选择正确版本，用新的合法 Session ID 验证。[调用说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_130.html)
 
+## IAM 与 API Key 支持情况
+
+核对日期：2026-10-09。AgentArts 高代码运行时支持以下两种入站认证；认证由平台网关完成，再将请求转发给容器。[官方调用概述](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_130.html)
+
+| 运行时配置 | 调用方携带内容 | 官方指导 |
+| --- | --- | --- |
+| `authorizer_type: API_KEY` | `Authorization: Bearer <运行时 API Key>` | [API Key 调用实践](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0042.html) |
+| `authorizer_type: IAM` | 使用调用方的 AK/SK，经签名 SDK 生成 `Authorization` | [IAM 调用实践](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0063.html) |
+
+这里的“两种都支持”是平台提供两种选项。创建接口的 `identity_configuration.authorizer_type` 是单个字符串，因此不能据此认为同一个运行时默认同时接受 IAM 和 API Key。[创建运行时 API](https://support.huaweicloud.com/api-agentarts/CreateCoreRuntime.html)
+
+IAM 实践使用 `V11-HMAC-SHA256` 和实际区域（本项目为 `cn-southwest-2`）；调用运行时数据面时设置 `X-Sdk-Content-Sha256: UNSIGNED-PAYLOAD`，由 SDK 生成 `X-Sdk-Date` 和签名头，同时携带会话 ID。签名应随请求生成，不能用固定 Bearer 字符串替代。API Key 则从运行时详情的权限与访问控制入口，进入 AgentIdentity 获取。[IAM 签名示例](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0063.html)、[API Key 获取方式](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0042.html)
+
+文旅服务的 [AgentController](../src/main/java/com/heilos/travel/AgentController.java) 不做入站验签，符合网关先鉴权的托管方式；仅为选择 IAM 或 API Key，无需引入巫山或重新构建镜像。直接访问本地容器时没有这层平台认证。运行时 API Key、`CLASSIFIER_API_KEY` 和 `model_config.auth_token` 分别用于平台入口、图片分类器和模型，互不替代。
+
+音频工程的 IAM 代码属于同仓库附带的调用、部署工具，不代表业务服务端自行验签。2026-10-10 按同一固定提交补充核对：
+
+- [app.py](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/app.py#L26-L55) 是云端业务入口：用 `AgentArtsRuntimeApp` 接收请求，转交 `handle_invocation`，没有导入调用脚本或自行 IAM 验签；`context.user_id` 仅用于任务归属检查。[main.py](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/main.py#L2-L21) 是本地转写测试入口。
+- [invoke.py](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/invoke.py#L35-L68)、[test_agent_iam.sh](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/test_agent_iam.sh#L36-L39)、[postman_proxy.py](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/postman_proxy.py#L27-L65) 是调用机上的脚本/代理，读取调用方 AK/SK，通过 `RuntimeClient` 的 V11 签名调用远端运行时。
+- [scripts/deploy.sh](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/scripts/deploy.sh#L91-L97) 中的 AK/SK 用于部署机执行 `agentarts configure/launch`，指定服务入口 `app:app`。
+
+同一个 `agentarts-sdk` 同时提供服务端应用和客户端调用能力。文旅工程提供独立的 [IAM 测试脚本](../scripts/test_agentarts_iam.py)，使用官方 APIG SDK 签名，并实时读取本服务的 SSE；服务端业务保持现状。不能直接照搬上述聚合 JSON 的 Postman 代理，否则会丢失当前 SSE 增量返回方式。安装、凭据配置及正反向测试见 [IAM 验证步骤](verification.md#iam-运行时验证)。
+
+用户提供的音频仓库在固定提交 `d7202f1` 内存在矛盾：[构建部署指导手册](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/构建部署指导手册.md#L166-L180) 给出 IAM 默认、API Key 可选的配置，[DEPLOY.md](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/DEPLOY.md#L157-L170) 使用 Bearer 调用，[接口测试报告](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/接口测试报告.md#L3-L29) 记录 API Key 运行时返回 200；但 [接口调用指导手册](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/接口调用指导手册.md#L377-L408) 又称必须 IAM，且列出两个不同运行时。不能把该排错建议解释为平台不支持 API Key，应以官方文档和目标运行时实际配置为准。
+
+还需区分运行时执行与资源管理接口：当前区域的 [认证分类表](https://support.huaweicloud.com/api-agentarts/agentarts_07_0005.html) 将运行时管理列为 AK/SK，将运行时执行列为 API Key、AK/SK、OAuth 2.0。旧版华北北京四文档中的 `X-Auth-Token`，以及本项目 Koo Search 使用的 IAM Token，不能直接套用到这里的 `/runtimes/{name}/invocations`。
+
+客户端已通过本地模拟网关测试，尚未执行真实文旅运行时 IAM 签名联调。若要验收 IAM，可使用同一镜像另外创建 IAM 运行时，验证合法签名成功、无效签名被网关拒绝，并验证真实问答的流式响应；保留现有 API Key 运行时，避免影响当前调用。
+
 ## 对接与安全边界
 
 AgentArts 网关负责入口认证，当前 Java 服务不校验外层平台 Token。下游分类器使用 `X-API-Key`，模型凭据来自每次请求，真实 Koo Search 支持 AppCode 或 IAM Token。Token 文件每次检索重读，但没有自动申请或续期；未集成巫山、CCMS/CSMS、密码加解密或 CTS 业务审计。平台加密的 `E1-` 值不能直接作为分类器密钥。若部署需要这些能力，应单独明确并验收。

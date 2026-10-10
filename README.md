@@ -10,7 +10,7 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 .
 ├── src/main/          # 应用代码、配置和日志
 ├── src/test/          # 回归测试
-├── scripts/           # IO 请求与日志验证脚本
+├── scripts/           # IO、IAM 调用、日志验证脚本及客户端测试
 ├── docs/
 │   ├── deployment.md  # 镜像、SWR、AgentArts 部署
 │   ├── verification.md # 验证步骤和已验证基线
@@ -130,6 +130,8 @@ SSE 顺序为 workflow_started、node_started、message、workflow_finished、en
 每个实际阶段结束后输出 workflow_timing，包含 execution_id、stage、status、elapsed_ms、search_mode。按 execution_id 关联 SSE 与日志；total 为服务端工作流总耗时。所有耗时记录为 INFO，失败/取消分别用 status=failed/cancelled 表示。日志异步输出，队列满时丢弃以避免阻塞业务线程，不记录请求正文或凭据。
 
 日志阶段和本地验证见 [验证指南](docs/verification.md)，云端保存和查看见 [日志说明](docs/logging.md)。本地日志文件不会随镜像上传；云端需独立开启日志上报并验证采集。
+
+已部署 IAM 运行时可使用 `python3 scripts/test_agentarts_iam.py` 验证能力查询，追加 `--spec references/io_spec.md` 验证真实业务及 SSE，使用 `--expect-auth-rejection` 测试无效签名拒绝。先按 [IAM 验证步骤](docs/verification.md#iam-运行时验证) 配置官方签名 SDK、调用方 AK/SK 和完整运行时 URL；不需要修改 Java 服务或重新构建镜像。
 
 ## 测试与部署
 
