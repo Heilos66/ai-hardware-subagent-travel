@@ -10,14 +10,14 @@
 ./mvnw verify
 ```
 
-预期 `BUILD SUCCESS`，116 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消、日志隔离及 150ms 非阻塞检索占位。
+预期 `BUILD SUCCESS`，154 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消及日志隔离；40 项 RAGFlow 专项用例覆盖检索协议、片段过滤、错误、重试总时限、取消和 Token 文件轮换。
 
 仅检查日志相关改动可以执行 `./scripts/verify_logs.sh test`。Maven 可通过 `MAVEN_USER_HOME` 和 `MAVEN_REPO_LOCAL` 指定缓存目录，缓存齐全时使用 `test -o` / `build -o`。
 
 ## 本地启动与请求
 
 ```bash
-# 终端一：打包后启动；默认 8081，固定 stub 检索
+# 终端一：打包后启动；默认 8081，使用 .env 中的 RAGFlow 配置
 ./scripts/verify_logs.sh build
 ./scripts/verify_logs.sh start
 
@@ -30,7 +30,7 @@
 ./scripts/verify_logs.sh logs
 ```
 
-`request` 会调用实际分类器或模型。默认读取本地 IO 文件，不打印或转发文档中的网关鉴权头；先用 `python3 scripts/test_io_spec.py --check` 校验格式。自定义端口/文件使用 `request 8082 /实际路径/io_spec.md`。更多参数见 `./scripts/verify_logs.sh help`。
+`request` 会按业务分支调用实际分类器、RAGFlow 和模型；文本/高置信度图片链路需要可用的知识库网络和凭据。默认读取本地 IO 文件，不打印或转发文档中的网关鉴权头；先用 `python3 scripts/test_io_spec.py --check` 校验格式。自定义端口/文件使用 `request 8082 /实际路径/io_spec.md`。更多参数见 `./scripts/verify_logs.sh help`。
 
 验证点：
 
@@ -124,14 +124,14 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
 ## 真实检索、镜像及云端验收
 
-- 恢复真实检索：按 [Koo Search 配置](koosearch.md) 设置 `KOOSEARCH_MODE=live`，用加载了环境变量的 JAR 或容器启动；日志验证脚本的 start 固定为 stub。分别验证文本库和图片库，不能用空资料占位代替检索验收。
+- 真实检索：按 [RAGFlow 接入](ragflow-travel-agent-integration.md#本工程接入与验证) 配置知识库地址、ID 与 Token，用日志脚本、加载了环境变量的 JAR 或容器启动。分别验证纯文本、高置信度图片的检索链路和低置信度图片的视觉链路。
 - 镜像与 SWR：按 [部署说明](deployment.md) 构建 ARM64 Docker V2 镜像，核对非 root 用户、健康和三条业务路径，再推送、读回 digest 并实际拉取。
 - AgentArts：确认实际运行版本、入站鉴权及出站网络；对云端接口验证能力、文本/图片路由、SSE 首片、思考增量、超时和断连。用一次请求的 execution_id 在 LTS 找到相同日志。
 - IAM、凭据轮转、CTS 或其他公司安全要求独立验收，不能以一次问答成功替代。
 
-### RAGFlow 接入前验证（2026-10-10）
+### RAGFlow 接入验证（2026-10-10）
 
-依据本地 `ragflow-travel-agent-integration.md`，验证 `http://172.16.0.154:9380/api/v1/retrieval`。本轮未通过真实查询验证，因此尚未切换检索实现，现有 stub/Koo Search 配置保持原状。
+依据本地 `ragflow-travel-agent-integration.md`，已实现异步检索接入，知识检索统一使用 RAGFlow，本地 .env 和环境模板仅保留所需配置。154 项 Java 测试全部通过，JAR 构建成功；未发布新镜像或修改 AgentArts 运行时。真实 API 的前置验证与接入后复测均未收到 HTTP 响应，不能将模拟测试通过视为知识库验收通过。
 
 | 检查 | 本机实测结果 |
 | --- | --- |
@@ -139,14 +139,17 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 | 带文档凭据的检索 POST | 查询“兵马俑是什么时候发现的”，使用文档的 dataset、Top3、0.2 阈值及 rerank；在收到 HTTP 响应前连接被关闭，`RemoteDisconnected` |
 | 不带凭据的 HTTP 对照 | curl 返回 52 / `Empty reply from server`，HTTP 状态为 000，约 5 秒结束 |
 | 本机目标路由 | 经 `utun24`，网关 `172.18.0.1`；尚未证实通往目标 VPC 的实际链路 |
+| 接入后的真实检索复测 | 加载本地 RAGFLOW 配置发送同一中文查询，5007ms 后 RemoteDisconnected，仍未收到 HTTP 响应 |
 
 凭据、知识原文未写入验证日志。当前结果不能证明 Token 无效，也不能断言知识库服务本身损坏。下一步需要从同 VPC 的 ECS/运行时执行相同查询，或提供本机可用的访问通道；验收应分别检查 HTTP 状态、业务 code=0、有效 chunks、四类文物的相关性、中文问题召回、无命中和无效认证场景。
 
-文档中的 Java 示例不能直接替换本项目：`timeoutSeconds` 未应用到 HTTP 客户端；业务错误返回空列表会掩盖故障；同步 RestClient 和 `.call()` 不适用于现有 WebFlux/SSE 路径；“回答带来源文档”的建议与现有纯文本提示词冲突。接入时应复用异步 WebClient、现有系统提示词和流式模型调用，仅适配检索请求及 chunks。
+工程接入复用了异步 WebClient、现有系统提示词和流式模型调用，仅适配检索请求及 chunks。相比参考示例，已应用整个检索过程的超时、仅对临时故障重试、明确区分业务失败与空结果，并保留上下文长度限制；没有引入同步 RestClient、`.call()` 或“回答带来源文档”的提示词。
 
 另外，文档将 keyword 描述为“true=BM25、false=纯向量、不传=混合”并不准确。官方 v0.27.2 文档将其描述为关键词匹配开关，默认 false；向量与词项相似度占比由 `vector_similarity_weight` 控制。不能仅凭 keyword 的布尔值判定纯向量或混合检索。[官方检索参数](https://github.com/infiniflow/ragflow/blob/v0.27.2/docs/references/http_api_reference.md#retrieve-chunks)
 
-## 已验证的基线（2026-10-09）
+## 历史验证基线（2026-10-09，旧版）
+
+以下记录早期未接真实知识库的版本，只作为历史样本，不是当前 RAGFlow 实现的验收结果。
 
 | 项目 | 结果 |
 | --- | --- |
@@ -157,7 +160,7 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 | 正文一致性 | 两次真实调用的增量拼接均与最终答案一致 |
 | 文本耗时样本 | 检索 166.341ms、模型 3505.288ms、total 3693.020ms |
 | 图片耗时样本 | 分类 649.743ms、模型 21943.841ms、total 22595.319ms |
-| 仍待验证 | 真实 Koo Search、高置信度图片的完整真实链路、AgentArts 部署/网关及 LTS 实际采集 |
+| 后续待验证 | 当前 RAGFlow 真实链路、高置信度图片的完整真实链路、AgentArts 部署/网关及 LTS 实际采集 |
 
 已推送并重新拉取的镜像：
 

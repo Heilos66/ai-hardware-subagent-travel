@@ -56,7 +56,7 @@ class StreamingTest extends AgentTestSupport {
         "data: {\"choices\":[{\"delta\":{\"content\":123}}]}\n\n"
       })
   void partialAnswerNeverBecomesSuccess(String tail) {
-    handler = r -> r.uri().startsWith("/search") ? success(r) : Reply.sse(delta("部分回答", "") + tail);
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r) : Reply.sse(delta("部分回答", "") + tail);
     var events = run(input());
     assertThat(result(events).path("code").asText()).isEqualTo("E5003");
     assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
@@ -75,7 +75,7 @@ class StreamingTest extends AgentTestSupport {
       })
   void bothCompletionMarkers(String tail) {
     handler =
-        r -> r.uri().startsWith("/search") ? success(r) : Reply.sse(delta(" 保留空格 ", "") + tail);
+        r -> r.uri().startsWith("/api/v1/retrieval") ? success(r) : Reply.sse(delta(" 保留空格 ", "") + tail);
     var result = result(run(input()));
     assertThat(result.path("code").asText()).isEqualTo("0");
     assertThat(result.path("message").asText()).isEqualTo(" 保留空格 ");
@@ -86,7 +86,7 @@ class StreamingTest extends AgentTestSupport {
   void invalidFinishReasonCannotMaskTruncation(String reason) {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : Reply.sse(
                     delta("部分回答", "")
@@ -98,7 +98,7 @@ class StreamingTest extends AgentTestSupport {
 
   @Test
   void reasoningOnlyFailsButIsDeliveredSeparately() {
-    handler = r -> r.uri().startsWith("/search") ? success(r) : Reply.sse(delta("", "分析片段") + DONE);
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r) : Reply.sse(delta("", "分析片段") + DONE);
     var events = run(input());
     assertThat(result(events).path("code").asText()).isEqualTo("E5003");
     assertThat(messages(events)).hasSize(1);
@@ -110,7 +110,7 @@ class StreamingTest extends AgentTestSupport {
   void jsonFallbackPreservesTextAndReasoning() {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : Reply.json(
                     Map.of(
@@ -134,7 +134,7 @@ class StreamingTest extends AgentTestSupport {
   void legacyBusinessJsonFallback(String code) {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : new Reply(
                     200,
@@ -155,7 +155,7 @@ class StreamingTest extends AgentTestSupport {
   void invalidFallbackIsSafe(String raw) {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : new Reply(200, "application/json", Flux.just(raw));
     var events = run(input());
@@ -168,7 +168,7 @@ class StreamingTest extends AgentTestSupport {
     Sinks.One<Void> release = Sinks.one();
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : new Reply(
                     200,
@@ -197,7 +197,7 @@ class StreamingTest extends AgentTestSupport {
     AtomicBoolean cancelled = new AtomicBoolean();
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : new Reply(
                     200,
@@ -220,7 +220,7 @@ class StreamingTest extends AgentTestSupport {
     AtomicBoolean cancelled = new AtomicBoolean();
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : new Reply(
                     200,
@@ -275,7 +275,7 @@ class StreamingTest extends AgentTestSupport {
   void roleUsageFramesIgnoredAndContentFilterFails() {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : Reply.sse(
                     "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n"
@@ -285,7 +285,7 @@ class StreamingTest extends AgentTestSupport {
     assertThat(result(run(input())).path("code").asText()).isEqualTo("0");
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : Reply.sse(
                     delta("部分", "")

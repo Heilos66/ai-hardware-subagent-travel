@@ -1,6 +1,59 @@
 # 标准 RAG 检索 API · 文旅 Agent 接入说明（Spring AI 1.0 / Java 版）
 
-> 本文件为接入参考，示例代码尚未合入工程；实际验证状态见 [验证指南](verification.md#ragflow-接入前验证2026-10-10)。凭据使用 `${RAGFLOW_API_TOKEN}` 占位，真实值从调用环境注入。
+> 工程已按此文档接入 RAGFlow，以下“本工程接入与验证”为当前实现；后面的原始示例保留作接口参考。真实值从运行环境注入，不随 Git 或镜像发布。本机真实接口尚未连通，验证状态见 [验证指南](verification.md#ragflow-接入验证2026-10-10)。
+
+## 本工程接入与验证
+
+2026-10-10：使用现有异步 WebClient 实现 [RagFlowClient](../src/main/java/com/heilos/travel/RagFlowClient.java)，由 [ExternalServices](../src/main/java/com/heilos/travel/ExternalServices.java) 接入原有检索入口。沿用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.9，不增加 Maven 依赖。没有使用下面示例的同步 RestClient、`.call()` 或替换控制器。
+
+三条路径保持原有规则：纯文本使用原问题查询 RAGFlow；图片分类名称非空且置信度 ≥ 0.7 时，以“检索关于{名称}的文档”查询同一个 travel_kb，再调用文本模型；其余图片调用视觉模型。检索片段交给现有 Prompts 构建上下文，仍使用原有纯文本、短回答提示词；不会要求模型展示 document_keyword 等来源元数据。模型 stream=true、思考参数透传及 SSE 协议保持不变。
+
+### 配置
+
+以 [.env.example](../.env.example) 为模板。下面所有变量配置在本地 `.env` 或 AgentArts 运行时环境中，不加入业务请求体：
+
+| 变量 | 当前配置或默认行为 |
+| --- | --- |
+| `RAGFLOW_URL` | `http://172.16.0.154:9380/api/v1/retrieval`，必须是完整 HTTP(S) URL |
+| `RAGFLOW_DATASET_ID` | `e611c8e0c45111f19cb7ff060c22c24e` |
+| `RAGFLOW_API_TOKEN` | 部署时注入真实 Bearer Token |
+| `RAGFLOW_API_TOKEN_FILE` | 可选 UTF-8 文件，优先于环境 Token，每次查询异步重读；文件不可读时返回配置错误 |
+| `RAGFLOW_RERANK_ID` | 模板为 `bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible`；留空则不发送 rerank_id |
+| `RAGFLOW_TOP_K` | 默认 3，范围 1～50 |
+| `RAGFLOW_SIMILARITY_THRESHOLD` | 默认 0.2，范围 0～1，发送到 RAGFlow |
+| `RAGFLOW_MIN_SIMILARITY` | 默认 0.3，范围 0～1，在客户端过滤低于此值的片段 |
+| `RAGFLOW_TIMEOUT` | 默认 10 秒，包含凭据读取、所有请求与退避的整次检索时限 |
+| `RAGFLOW_RETRIES` | 默认 2，范围 0～2；仅连接异常、HTTP 408/429/5xx 重试，退避 100/200ms |
+
+知识检索统一使用 RAGFlow，无需选择检索提供方；超时由 `RAGFLOW_TIMEOUT` 控制。
+
+要求 HTTP 成功且 JSON 业务 code 为数字 0，再解析 data.chunks。保持服务端片段顺序，过滤空正文和低分片段，最多保留 TopK，并沿用 `MAX_CONTEXT_CHARS=16000` 的上下文限制。未传 keyword 或向量权重，采用服务端默认配置。
+
+正常的空 chunks 或过滤后为空时继续原有无资料问答；HTTP、业务、格式、超时错误返回 E5002，配置或凭据缺失返回 E5004，均停止模型调用。错误不会被隐藏为空资料。下游断连会取消检索及重试。
+
+### 本地与云端验证
+
+```bash
+# 自动化测试与打包；不需要真实业务凭据
+./mvnw verify
+
+# JDK 21；在同一终端加载本地配置，启动真实 RAGFlow 模式
+set -a
+source .env
+set +a
+java -jar target/travel-agent.jar
+
+# 另一个终端：使用本地 IO 请求，默认端口 8080
+python3 scripts/test_io_spec.py --port 8080 --spec references/io_spec.md
+```
+
+也可使用 `./scripts/verify_logs.sh start`：加载 .env 中的真实 RAGFlow 配置，默认端口 8081，并将日志保存到 target/local-logs/application.log。直接启动 JAR 的日志输出在终端。环境变量修改后重启服务；仅 Token 文件内容更新无需重启。没有知识库网络或凭据时可先测试能力查询和非法输入，正常文本/高置信度图片请求需要真实检索成功。
+
+真实接口可达后，分别以“兵马俑是什么时候发现的”“长信宫灯有什么特点”“唐三彩载乐骆驼俑是什么”“三星堆青铜人面具是什么”验证召回相关性，再验证高/低置信度图片路由。检查业务 code="0"、SSE 正文增量和最终正文一致，按 execution_id 核对 `search_mode=ragflow`、search_text/search_image、model 和 total 日志。154 项本地测试验证了客户端协议和流程，不代表上述真实语料已完成验收。
+
+部署到 AgentArts 时，重新构建含本次代码的镜像，设置上述运行时变量，并按 [部署指南](deployment.md) 发布或切换到对应版本后，用新 Session ID 验证。`.env` 不会进入镜像，需单独配置运行时凭据。运行时须能路由到 172.16.0.154:9380，且仍可访问分类器和模型；见 [私网配置说明](agentarts-knowledge-network.md)。本次未构建或推送新镜像，未修改云端运行时。
+
+## 原始接入参考
 
 版本：v2.0（2026-10-10，基于 Spring AI 1.0 GA 官方文档 + 真实跑通的 run-20261010-105036.log）
 
@@ -8,7 +61,7 @@
 
 用途：文旅/cultural-tourism agent 通过本 API 检索文物知识库，获取相关原文片段喂给 LLM 生成回答。
 
-状态：✅ RAGFlow 端到端调通，6 个 query 全部 <1s 返回相关结果，API Token 已生成可用。
+参考方原文状态：RAGFlow 端到端调通，6 个 query 全部 <1s 返回相关结果，API Token 已生成可用。此为文档提供方的环境结果，不代表本工程或 AgentArts 已通过真实查询验收。
 
 ---
 
@@ -72,7 +125,7 @@
 | question | ✅ | — | 用户问题，bge-m3 多语言（中英文均可） |
 | page_size | ❌ | 30 | 返回 chunk 数，agent 取 3~5 |
 | similarity_threshold | ❌ | 0.2 | 相似度下限 |
-| keyword | ❌ | — | true=BM25；false=向量；不传=hybrid 混合（推荐） |
+| keyword | ❌ | false | 关键词匹配开关，不是纯向量/BM25 模式切换；本工程不传 |
 | rerank_id | ❌ | — | 重排模型，传了走 rerank 精排 |
 
 ### 响应（关键字段）
@@ -176,7 +229,7 @@ Spring Boot 3.2+ 与 Spring AI 1.0 GA 配套；JDK 17+。
 
 ---
 
-## 5. 路线 B 代码（推荐，可直接用）
+## 5. 路线 B 代码（原始示例，仅供参考）
 
 ### 5.1 配置（application.yml）
 
@@ -377,7 +430,7 @@ public class RagFlowRetrievalService {
         req.setQuestion(question);
         req.setPageSize(topK);
         req.setSimilarityThreshold(props.getSimilarityThreshold());
-        // keyword 不设 = hybrid 混合检索（推荐）
+        // keyword 不设，使用服务端默认值；向量/词项占比由 vector_similarity_weight 决定。
         req.setKeyword(null);
         req.setRerankId(props.getRerankId());
 
@@ -667,7 +720,7 @@ http://<ECS公网EIP>:9380/api/v1/retrieval
 ## 9. 文旅 Agent 集成建议
 
 1. 推荐路线 B（直接 HTTP），1 天内可落地；路线 A（Spring AI 原生 RAG）按需选。
-2. 检索参数：page_size=3~5、similarity_threshold=0.2、不传 keyword（hybrid）、传 rerank_id（精排）。
+2. 检索参数：page_size=3~5、similarity_threshold=0.2、不传 keyword（服务端默认）、传 rerank_id（精排）。
 3. 低质过滤：返回 chunk similarity < 0.3 丢弃，避免噪声进 LLM。
 4. 引用溯源：回答带 document_keyword（兵马俑/长信宫灯/唐三彩骆驼/青铜面具）。
 5. 多语言：bge-m3 多语言，中文问英文库可召回（实测通过）。

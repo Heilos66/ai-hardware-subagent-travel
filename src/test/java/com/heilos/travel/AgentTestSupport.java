@@ -90,11 +90,9 @@ abstract class AgentTestSupport {
   AgentSettings settings(Map<String, String> overrides) {
     MockEnvironment env =
         new MockEnvironment()
-            .withProperty("KOOSEARCH_MODE", "live")
-            .withProperty("KOOSEARCH_URL", base + "/search")
-            .withProperty("KOOSEARCH_TEXT_REPO_ID", "text-repo")
-            .withProperty("KOOSEARCH_IMAGE_REPO_ID", "image-repo")
-            .withProperty("KOOSEARCH_APPCODE", "search-secret")
+            .withProperty("RAGFLOW_URL", base + "/api/v1/retrieval")
+            .withProperty("RAGFLOW_DATASET_ID", "travel-kb")
+            .withProperty("RAGFLOW_API_TOKEN", "search-secret")
             .withProperty("CLASSIFIER_URL", base + "/classifier")
             .withProperty("CLASSIFIER_API_KEY", "classifier-secret");
     overrides.forEach(env::setProperty);
@@ -187,9 +185,10 @@ abstract class AgentTestSupport {
   static final String DONE = "data: [DONE]\n\n";
 
   Reply success(Captured request) {
-    if (request.uri.startsWith("/search"))
+    if (request.uri.startsWith("/api/v1/retrieval"))
       return Reply.json(
-          Map.of("doc_list", List.of(Map.of("content", "秦代陶俑", "title", "陶俑", "score", 88))));
+          Map.of("code", 0, "data", Map.of("chunks",
+              List.of(Map.of("content", "秦代陶俑", "document_keyword", "陶俑", "similarity", .88)))));
     if (request.uri.startsWith("/classifier")) return classification("70%");
     return Reply.sse(delta("", "思考") + delta("这是", "") + delta("秦代陶俑。", "") + DONE);
   }

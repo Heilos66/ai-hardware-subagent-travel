@@ -40,8 +40,8 @@ SWR 基础版需要 Docker V2 清单，本机曾用 `--load` 导出 OCI index，
 
 - 镜像默认 Java 启动命令、8080 端口和 `/ping` 健康检查。
 - `.env.example` 中需要的环境变量；分类器地址为 `http://1.95.152.66:16000/mobilenetv3large`，使用可用的 `CLASSIFIER_API_KEY`。
-- 临时检索使用 `KOOSEARCH_MODE=stub`，不需要知识库地址或认证；恢复真实检索见 [Koo Search](koosearch.md)。
-- 到 MobileNet、模型 endpoint 的出站网络；使用 `live` 时还需连通 Koo Search。
+- 知识库统一使用 RAGFlow，配置 `RAGFLOW_URL`、`RAGFLOW_DATASET_ID`、`RAGFLOW_API_TOKEN` 及重排模型，具体见 [RAGFlow 接入](ragflow-travel-agent-integration.md#本工程接入与验证)。Token 在运行时注入，不能依赖本机 .env 随镜像上传。
+- 运行时需能访问 `172.16.0.154:9380`，私网配置见 [网络说明](agentarts-knowledge-network.md)；同时验证 MobileNet、模型 endpoint 的出站网络。
 - 入站认证、日志记录及 LTS 授权，日志查看见 [日志说明](logging.md)。
 
 上述平台配置应来自当前运行时；已有环境变量优先于镜像默认值。[部署说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_031.html)
@@ -91,13 +91,13 @@ IAM 实践使用 `V11-HMAC-SHA256` 和实际区域（本项目为 `cn-southwest-
 
 用户提供的音频仓库在固定提交 `d7202f1` 内存在矛盾：[构建部署指导手册](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/构建部署指导手册.md#L166-L180) 给出 IAM 默认、API Key 可选的配置，[DEPLOY.md](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/DEPLOY.md#L157-L170) 使用 Bearer 调用，[接口测试报告](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/接口测试报告.md#L3-L29) 记录 API Key 运行时返回 200；但 [接口调用指导手册](https://github.com/PartnerEcoDep/ai-hardware-subagent-audio-transcription/blob/d7202f1600185bd541b5d29327702de77a9e422e/docs/接口调用指导手册.md#L377-L408) 又称必须 IAM，且列出两个不同运行时。不能把该排错建议解释为平台不支持 API Key，应以官方文档和目标运行时实际配置为准。
 
-还需区分运行时执行与资源管理接口：当前区域的 [认证分类表](https://support.huaweicloud.com/api-agentarts/agentarts_07_0005.html) 将运行时管理列为 AK/SK，将运行时执行列为 API Key、AK/SK、OAuth 2.0。旧版华北北京四文档中的 `X-Auth-Token`，以及本项目 Koo Search 使用的 IAM Token，不能直接套用到这里的 `/runtimes/{name}/invocations`。
+还需区分运行时执行与资源管理接口：当前区域的 [认证分类表](https://support.huaweicloud.com/api-agentarts/agentarts_07_0005.html) 将运行时管理列为 AK/SK，将运行时执行列为 API Key、AK/SK、OAuth 2.0。旧版华北北京四文档中的 `X-Auth-Token` 不能直接套用到这里的 `/runtimes/{name}/invocations`。
 
 客户端已通过本地模拟网关测试，尚未执行真实文旅运行时 IAM 签名联调。若要验收 IAM，可使用同一镜像另外创建 IAM 运行时，验证合法签名成功、无效签名被网关拒绝，并验证真实问答的流式响应；保留现有 API Key 运行时，避免影响当前调用。
 
 ## 对接与安全边界
 
-AgentArts 网关负责入口认证，当前 Java 服务不校验外层平台 Token。下游分类器使用 `X-API-Key`，模型凭据来自每次请求，真实 Koo Search 支持 AppCode 或 IAM Token。Token 文件每次检索重读，但没有自动申请或续期；未集成巫山、CCMS/CSMS、密码加解密或 CTS 业务审计。平台加密的 `E1-` 值不能直接作为分类器密钥。若部署需要这些能力，应单独明确并验收。
+AgentArts 网关负责入口认证，当前 Java 服务不校验外层平台 Token。下游分类器使用 `X-API-Key`，模型凭据来自每次请求，RAGFlow 使用 Bearer API Token。检索 Token 文件每次查询重读，但没有自动申请或续期；未集成巫山、CCMS/CSMS、密码加解密或 CTS 业务审计。平台加密的 `E1-` 值不能直接作为分类器或 RAGFlow 的凭据。若部署需要这些能力，应单独明确并验收。
 
 用户提供的音频工程文档在同一固定提交中存在接口差异，最终对接前仍需确认：
 

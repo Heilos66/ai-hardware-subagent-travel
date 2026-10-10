@@ -7,15 +7,13 @@ import org.slf4j.LoggerFactory;
 final class WorkflowTiming {
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowTiming.class);
   private final String executionId;
-  private final String searchMode;
   private final long started = System.nanoTime();
   private String stage;
   private long stageStarted;
   private boolean finished;
 
-  WorkflowTiming(String executionId, String searchMode) {
+  WorkflowTiming(String executionId) {
     this.executionId = executionId;
-    this.searchMode = searchMode;
   }
 
   synchronized void startStage(String next) {
@@ -43,12 +41,11 @@ final class WorkflowTiming {
     double elapsedMs = Math.round((System.nanoTime() - since) / 1000.0) / 1000.0;
     try {
       LOG.info(
-          "workflow_timing execution_id={} stage={} status={} elapsed_ms={} search_mode={}",
+          "workflow_timing execution_id={} stage={} status={} elapsed_ms={} search_mode=ragflow",
           executionId,
           stage,
           status,
-          elapsedMs,
-          searchMode);
+          elapsedMs);
     } catch (RuntimeException ignored) {
       // Instrumentation failures must not change SSE results or upstream cancellation.
     }

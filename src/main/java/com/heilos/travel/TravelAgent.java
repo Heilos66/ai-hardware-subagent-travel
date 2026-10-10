@@ -66,7 +66,7 @@ final class TravelAgent {
       return Flux.concat(
           Flux.just(new Stage("search_text", "知识检索_文本", "KnowledgeRepo")),
           services
-              .search(query, false)
+              .search(query)
               .flatMapMany(
                   chunks ->
                       generate(
@@ -85,7 +85,7 @@ final class TravelAgent {
                     return Flux.concat(
                         Flux.just(new Stage("search_image", "知识检索_图片", "KnowledgeRepo")),
                         services
-                            .search("检索关于" + classification.name() + "的文档", true)
+                            .search("检索关于" + classification.name() + "的文档")
                             .flatMapMany(
                                 chunks ->
                                     generate(

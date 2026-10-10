@@ -24,7 +24,7 @@ final class WorkflowEvents {
   Flux<String> stream(JsonNode payload) {
     return Flux.defer(
         () -> {
-          State state = new State(settings.searchMode);
+          State state = new State();
           Flux<String> body =
               agent
                   .run(payload)
@@ -180,8 +180,8 @@ final class WorkflowEvents {
     boolean failed;
     Map<String, Object> result;
 
-    State(String searchMode) {
-      timing = new WorkflowTiming(executionId, searchMode);
+    State() {
+      timing = new WorkflowTiming(executionId);
     }
   }
 }

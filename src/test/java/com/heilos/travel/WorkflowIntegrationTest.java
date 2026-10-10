@@ -21,7 +21,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
   void textRouteAndIndependentReasoningDeltas() {
     handler =
         r ->
-            r.uri().startsWith("/search")
+            r.uri().startsWith("/api/v1/retrieval")
                 ? success(r)
                 : Reply.sse(
                     delta("", "先识别。")
@@ -37,12 +37,11 @@ class WorkflowIntegrationTest extends AgentTestSupport {
         .containsExactly("", "", " 讲解", "正文\n");
     assertThat(requests).hasSize(2);
     assertThat(requests.getFirst().headers())
-        .containsEntry("x-apig-appcode", "search-secret")
-        .doesNotContainKey("authorization");
+        .containsEntry("authorization", "Bearer search-secret");
     assertThat(requests.getFirst().body())
         .isEqualTo(
             Json.parse(
-                "{\"repo_id\":\"text-repo\",\"content\":\"介绍这个展品\",\"scope\":\"doc\",\"page_num\":1,\"page_size\":3}"));
+                "{\"dataset_ids\":[\"travel-kb\"],\"question\":\"介绍这个展品\",\"page\":1,\"page_size\":3,\"similarity_threshold\":0.2}"));
     var model = requests.getLast();
     assertThat(model.uri()).isEqualTo("/text/chat/completions?version=1");
     assertThat(model.headers())
@@ -88,8 +87,8 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     assertThat(requests.getLast().uri()).startsWith("/" + type + "/");
     JsonNode content = requests.getLast().body().path("messages").get(1).path("content");
     if (type.equals("text")) {
-      assertThat(requests.get(1).body().path("repo_id").asText()).isEqualTo("image-repo");
-      assertThat(requests.get(1).body().path("content").asText()).isEqualTo("检索关于兵马俑的文档");
+      assertThat(requests.get(1).body().path("dataset_ids").get(0).asText()).isEqualTo("travel-kb");
+      assertThat(requests.get(1).body().path("question").asText()).isEqualTo("检索关于兵马俑的文档");
       assertThat(content.asText()).contains("これはなんですか？", "兵马俑");
     } else
       assertThat(content.get(1).path("image_url").path("url").asText())
@@ -99,7 +98,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
   @Test
   void emptyKnowledgeKeepsCandidateAndDefaultQuestion() {
     handler =
-        r -> r.uri().startsWith("/search") ? Reply.json(Map.of("doc_list", List.of())) : success(r);
+        r -> r.uri().startsWith("/api/v1/retrieval") ? Reply.json(Map.of("code", 0, "data", Map.of("chunks", List.of()))) : success(r);
     var input = input();
     input.put("query", "");
     input.put("image_url", List.of("https://image.test/a.png"));
@@ -206,7 +205,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"http", "malformed", "missing_docs", "timeout"})
+  @ValueSource(strings = {"http", "malformed", "missing_chunks", "timeout"})
   void searchFailuresStopBeforeModel(String failure) {
     handler =
         r ->
@@ -217,7 +216,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
               case "timeout" -> new Reply(200, "application/json", Flux.never());
               default -> Reply.json(Map.of("error", "secret"));
             };
-    var events = run(input(), settings(Map.of("SEARCH_TIMEOUT", "0.2")));
+    var events = run(input(), settings(Map.of("RAGFLOW_TIMEOUT", "0.2", "RAGFLOW_RETRIES", "0")));
     assertThat(result(events).path("code").asText()).isEqualTo("E5002");
     assertThat(requests).hasSize(1);
     assertThat(events.toString()).doesNotContain("secret");

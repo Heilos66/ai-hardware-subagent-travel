@@ -1,7 +1,6 @@
 package com.heilos.travel;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
@@ -18,13 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.mock.env.MockEnvironment;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
-class TimingAndStubTest extends AgentTestSupport {
+class WorkflowTimingTest extends AgentTestSupport {
   private final List<String> logs = new CopyOnWriteArrayList<>();
   private final Logger logger = (Logger) LoggerFactory.getLogger(WorkflowTiming.class);
   private Level previousLevel;
@@ -56,57 +54,30 @@ class TimingAndStubTest extends AgentTestSupport {
     logger.setAdditive(previousAdditive);
   }
 
-  private AgentSettings stub() {
-    return settings(
-        Map.of(
-            "KOOSEARCH_MODE", "stub",
-            "KOOSEARCH_URL", "not configured yet",
-            "KOOSEARCH_ENDPOINT", "not configured yet",
-            "KOOSEARCH_TEXT_REPO_ID", "",
-            "KOOSEARCH_IMAGE_REPO_ID", "",
-            "KOOSEARCH_APPCODE", "",
-            "KOOSEARCH_TOKEN", "",
-            "KOOSEARCH_TOKEN_FILE", "/unavailable/knowledge-token"));
-  }
-
   @Test
-  void defaultAddressAndStubMode() {
+  void defaultClassifierAndRagflowSettings() {
     var config = new AgentSettings(new MockEnvironment());
     assertThat(config.classifierUrl).isEqualTo("http://1.95.152.66:16000/mobilenetv3large");
     assertThat(config.classifierThreshold).isEqualTo(.7);
-    assertThat(config.searchMode).isEqualTo("stub");
-    assertThatThrownBy(
-            () -> new AgentSettings(new MockEnvironment().withProperty("KOOSEARCH_MODE", "typo")))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void stubWaitsExactly150msWithoutBlockingOrKnowledgeConfiguration(boolean image) {
-    StepVerifier.withVirtualTime(() -> new ExternalServices(http, stub()).search("问题", image))
-        .expectSubscription()
-        .expectNoEvent(Duration.ofMillis(149))
-        .thenAwait(Duration.ofMillis(1))
-        .assertNext(chunks -> assertThat(chunks).isEmpty())
-        .verifyComplete();
-    assertThat(requests).isEmpty();
+    assertThat(config.ragflow).isNotNull();
+    assertThat(config.ragflow.timeout()).isEqualTo(Duration.ofSeconds(10));
   }
 
   @ParameterizedTest
   @CsvSource({
-    "none,0.7,search_text,text,1",
-    "image,0.7,search_image,text,2",
+    "none,0.7,search_text,text,2",
+    "image,0.7,search_image,text,3",
     "image,0.69999,none,text_vision,2"
   })
-  void stubPreservesRoutesStreamingAndCorrelatedStageTimes(
+  void ragflowRoutesStreamingAndCorrelatedStageTimes(
       String image, String confidence, String search, String model, int calls) {
     handler = r -> r.uri().startsWith("/classifier") ? classification(confidence) : success(r);
     var input = input();
     input.put("query", "private-query-42");
     if (image.equals("image")) input.put("image_url", List.of("https://image.test/private.jpg"));
-    var events = run(input, stub());
+    var events = run(input, settings());
     assertThat(result(events).path("code").asText()).isEqualTo("0");
-    assertThat(requests).hasSize(calls).allMatch(r -> !r.uri().startsWith("/search"));
+    assertThat(requests).hasSize(calls);
     assertThat(requests.getLast().uri()).startsWith("/" + model + "/");
     assertThat(
             messages(events).stream()
@@ -124,7 +95,7 @@ class TimingAndStubTest extends AgentTestSupport {
     awaitTotals(1);
     assertThat(logs)
         .allMatch(line -> line.contains("execution_id=" + executionId))
-        .allMatch(line -> line.contains("status=succeeded") && line.contains("search_mode=stub"));
+        .allMatch(line -> line.contains("status=succeeded") && line.contains("search_mode=ragflow"));
     var stages = logs.stream().map(line -> field(line, "stage")).toList();
     if (search.equals("none"))
       assertThat(stages).containsExactly("validate", "classify", "model", "total");
@@ -142,13 +113,13 @@ class TimingAndStubTest extends AgentTestSupport {
                           .findFirst()
                           .orElseThrow(),
                       "elapsed_ms")))
-          .isGreaterThanOrEqualTo(140);
+          .isGreaterThanOrEqualTo(0);
       assertThat(requests.getLast().body().path("messages").get(1).path("content").asText())
-          .contains("当前没有可用的内部资料");
+          .contains("秦代陶俑");
     }
     assertThat(logs.toString())
         .doesNotContain(
-            "private-query-42", "model-secret", "classifier-secret", "https://image.test");
+            "private-query-42", "model-secret", "search-secret", "classifier-secret", "https://image.test");
   }
 
   @Test
@@ -156,7 +127,7 @@ class TimingAndStubTest extends AgentTestSupport {
     handler = r -> new Reply(503, "application/json", Flux.just("private-upstream-secret"));
     var input = input();
     input.put("image_url", List.of("https://image.test/a.jpg"));
-    assertThat(result(run(input, stub())).path("code").asText()).isEqualTo("500");
+    assertThat(result(run(input, settings())).path("code").asText()).isEqualTo("500");
     awaitTotals(1);
     assertThat(logs.stream().map(l -> field(l, "stage") + ":" + field(l, "status")))
         .containsExactly("validate:succeeded", "classify:failed", "total:failed");
@@ -165,20 +136,24 @@ class TimingAndStubTest extends AgentTestSupport {
   }
 
   @Test
-  void cancellationDuringStubRecordsCancelledStageAndTotal() {
-    StepVerifier.create(events(stub()).stream(payload(input())))
+  void cancellationDuringRetrievalRecordsCancelledStageAndTotal() {
+    handler = r -> new Reply(200, "application/json", Flux.never());
+    StepVerifier.create(events(settings()).stream(payload(input())))
         .expectNextCount(3)
+        .thenAwait(Duration.ofMillis(10))
+        .then(() -> await().atMost(Duration.ofSeconds(2))
+            .untilAsserted(() -> assertThat(requests).hasSize(1)))
         .thenCancel()
         .verify(Duration.ofSeconds(3));
     awaitTotals(1);
     assertThat(logs.stream().map(l -> field(l, "stage") + ":" + field(l, "status")))
         .containsExactly("validate:succeeded", "search_text:cancelled", "total:cancelled");
-    assertThat(requests).isEmpty();
+    assertThat(requests).hasSize(1);
   }
 
   @Test
   void concurrentRequestsHaveIndependentExecutionIdsAndOneTotalEach() {
-    var workflow = events(stub());
+    var workflow = events(settings());
     var completed =
         Flux.range(0, 4)
             .flatMap(i -> workflow.stream(payload(input())).collectList())
@@ -211,7 +186,7 @@ class TimingAndStubTest extends AgentTestSupport {
     broken.start();
     logger.addAppender(broken);
     try {
-      assertThat(result(run(input(), stub())).path("code").asText()).isEqualTo("0");
+      assertThat(result(run(input(), settings())).path("code").asText()).isEqualTo("0");
       awaitTotals(1);
     } finally {
       logger.detachAppender(broken);

@@ -57,7 +57,7 @@ final class Prompts {
           .append("资料 ")
           .append(i + 1)
           .append("：")
-          .append(chunk.subtitle().isEmpty() ? chunk.title() : chunk.subtitle())
+          .append(chunk.title())
           .append("\n内容：")
           .append(chunk.content());
       if (Json.length(context.toString()) >= maxChars) break;

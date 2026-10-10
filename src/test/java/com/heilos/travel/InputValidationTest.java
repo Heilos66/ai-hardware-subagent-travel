@@ -134,40 +134,25 @@ class InputValidationTest extends AgentTestSupport {
     var settings =
         settings(
             Map.of(
-                "KOOSEARCH_APPCODE",
-                "",
-                "KOOSEARCH_TOKEN_FILE",
+                "RAGFLOW_API_TOKEN_FILE",
                 token.toString(),
-                "KOOSEARCH_TEXT_THRESHOLD",
-                "12.5",
-                "KOOSEARCH_URL",
-                base + "/search?env=prod"));
+                "RAGFLOW_SIMILARITY_THRESHOLD",
+                "0.25",
+                "RAGFLOW_URL",
+                base + "/api/v1/retrieval?env=prod"));
     var client = new ExternalServices(http, settings);
-    client.search("问题", false).block();
+    client.search("问题").block();
     Files.writeString(token, "second-token\n");
-    client.search("问题", false).block();
-    assertThat(requests.stream().map(r -> r.headers().get("x-auth-token")).toList())
-        .containsExactly("first-token", "second-token");
-    assertThat(requests.getFirst().uri()).isEqualTo("/search?env=prod");
+    client.search("问题").block();
+    assertThat(requests.stream().map(r -> r.headers().get("authorization")).toList())
+        .containsExactly("Bearer first-token", "Bearer second-token");
+    assertThat(requests.getFirst().uri()).isEqualTo("/api/v1/retrieval?env=prod");
     assertThat(requests.getFirst().headers()).doesNotContainKey("x-apig-appcode");
-    assertThat(requests.getFirst().body().path("search_threshold").asDouble()).isEqualTo(12.5);
+    assertThat(requests.getFirst().body().path("similarity_threshold").asDouble()).isEqualTo(.25);
   }
 
   @Test
-  void endpointCompositionAndProxyPaths() {
-    var settings =
-        settings(
-            Map.of(
-                "KOOSEARCH_URL",
-                "",
-                "KOOSEARCH_ENDPOINT",
-                base,
-                "KOOSEARCH_PROJECT_ID",
-                "project1",
-                "KOOSEARCH_APPLICATION_ID",
-                "app1"));
-    assertThat(settings.searchUrl())
-        .isEqualTo(base + "/v1/project1/applications/app1/uni-search/experience/searchtext");
+  void proxyPathsPreserveQueryParameters() {
     for (String path : List.of("/invocations", "/invocations/stream")) {
       var model = model("text");
       model.put("endpoint", base + path + "?version=1");
@@ -183,7 +168,7 @@ class InputValidationTest extends AgentTestSupport {
     assertThat(result(run(raw, settings(Map.of("CLASSIFIER_API_KEY", "")))).path("code").asText())
         .isEqualTo("E5004");
     assertThat(
-            result(run(input(), settings(Map.of("KOOSEARCH_TEXT_REPO_ID", ""))))
+            result(run(input(), settings(Map.of("RAGFLOW_DATASET_ID", ""))))
                 .path("code")
                 .asText())
         .isEqualTo("E5004");

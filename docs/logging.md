@@ -41,7 +41,7 @@
 | 高置信度图片，且识别名称非空 | `validate → classify → search_image → model → total` |
 | 低置信度图片 | `validate → classify → model → total` |
 
-本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。检索占位等待 150ms，加上调度、提示词准备后实测阶段耗时可能略大。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
+本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。为保持日志字段兼容，`search_mode` 固定为 `ragflow`；检索阶段记录读取 Token 文件、HTTP 请求、重试及提示词准备的实际耗时。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
 
 截至本次调研，运行时观测指南仍注明托管智能体的 Trace/Metric 查看功能未开放，而 API 结构里已经存在相应配置字段。因此不能仅凭开了日志开关或 API 中有字段，就认定会自动出现分类/检索/模型的链路图、P95 或 Token 图表；本项目当前提供的是日志打点，可在 LTS 另外分析。[运行时观测指南](https://support.huaweicloud.com/ops-agentarts/agentarts_14_0006.html)、[运行时 API 配置字段](https://support.huaweicloud.com/api-agentarts/ShowCoreRuntime.html)
 

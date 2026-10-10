@@ -9,12 +9,12 @@ usage() {
   cat <<'HELP'
 用法：./scripts/verify_logs.sh <命令> [参数]
 
-  start [端口]              加载 .env，以 stub 模式前台启动 JAR 并保存日志
+  start [端口]              加载 .env，以 RAGFlow 配置前台启动 JAR 并保存日志
   capabilities [端口]       查询能力；应有 validate、total 两条成功日志
-  request [端口] [IO文件]   发送 IO 请求，调用已配置的真实分类器或模型
+  request [端口] [IO文件]   发送 IO 请求，按业务分支调用真实分类器、RAGFlow 和模型
   failure [端口]            发送非法 operation；应有 validate、total 两条失败日志
   logs [execution_id]       查看全部或指定请求的耗时日志
-  test [Maven参数...]       运行 TimingAndStubTest，无需真实业务凭据
+  test [Maven参数...]       运行 WorkflowTimingTest，无需真实业务凭据
   build [Maven参数...]      重新构建 JAR（跳过测试，可先执行 test）
   help                     显示帮助
 
@@ -34,7 +34,8 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
   文本：validate → search_text → model → total
   高置信度图片：validate → classify → search_image → model → total
   低置信度图片：validate → classify → model → total
-  检索约 150ms（包含调度与提示词准备），同次请求 execution_id 相同。
+  检索记录实际调用耗时（包含重试与提示词准备），同次请求 execution_id 相同。
+  start 使用真实 RAGFlow；无知识库网络或凭据时，仍可执行 capabilities 和 failure。
   请求尚未结束时在客户端按 Ctrl+C，可检查当前阶段及 total 的 cancelled 日志。
   start 终端按 Ctrl+C 停止服务。代码变更后先 build，再重启 start。
 HELP
@@ -107,9 +108,9 @@ case "$command_name" in
     select_java
     umask 077
     mkdir -p "$(dirname "$log_file")"
-    printf '启动已有 JAR：http://127.0.0.1:%s，检索模式 stub\n日志：%s\n' "$run_port" "$log_file"
+    printf '启动已有 JAR：http://127.0.0.1:%s，知识库 RAGFlow\n日志：%s\n' "$run_port" "$log_file"
     printf '源码改动后请先执行 build；等到 Started 日志出现，再在另一终端发送请求。\n'
-    KOOSEARCH_MODE=stub PORT="$run_port" \
+    PORT="$run_port" \
       "$JAVA_HOME/bin/java" -jar target/travel-agent.jar 2>&1 | tee -a "$log_file"
     ;;
   capabilities|request)
@@ -183,7 +184,7 @@ PY
       maven_args+=("-Dmaven.repo.local=$MAVEN_REPO_LOCAL")
     fi
     if [[ "$command_name" == test ]]; then
-      ./mvnw "${maven_args[@]}" -Dtest=TimingAndStubTest "$@" test
+      ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest "$@" test
     else
       ./mvnw "${maven_args[@]}" -DskipTests "$@" package
     fi

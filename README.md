@@ -2,7 +2,7 @@
 
 Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArts 高代码运行时，不依赖巫山框架。
 
-保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。当前 `KOOSEARCH_MODE=stub`，检索非阻塞等待 150ms 后返回空资料，后续模型继续执行；`live` 恢复真实 Koo Search。
+保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索统一使用 RAGFlow，接入文档中的 travel_kb，真实私网连通性仍待云端验收。
 
 ## 目录
 
@@ -15,7 +15,7 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 │   ├── deployment.md  # 镜像、SWR、AgentArts 部署
 │   ├── verification.md # 验证步骤和已验证基线
 │   ├── logging.md     # 日志打点、AgentArts/LTS 保存与查看
-│   └── koosearch.md   # 真实知识检索配置和接口
+│   └── ragflow-travel-agent-integration.md # 当前 RAGFlow 接入与参考文档
 ├── references/        # 本地 IO 示例、原始工作流 JSONL（Git 忽略）
 ├── .mvn/              # Maven Wrapper 配置
 ├── .env.example       # 环境变量模板
@@ -32,26 +32,26 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 
 ```bash
 test -f .env || cp .env.example .env
-# 编辑 .env 中的分类器等配置
+# 编辑 .env 中的分类器及 RAGFlow 配置
 ./scripts/verify_logs.sh build
 ./scripts/verify_logs.sh start
 ```
 
-脚本优先使用 `JAVA_HOME`，也会查找本机 JDK 21。start 读取 `.env`，默认监听 8081，固定为 stub 检索模式，日志追加到 `target/local-logs/application.log`。源码修改后重新 build 并重启；运行时环境变量修改也需要重启。
+脚本优先使用 `JAVA_HOME`，也会查找本机 JDK 21。start 读取 `.env`，默认监听 8081，使用其中的真实 RAGFlow 配置，日志追加到 `target/local-logs/application.log`。源码修改后重新 build 并重启；运行时环境变量修改也需要重启。
 
 在另一个终端执行：
 
 ```bash
 ./scripts/verify_logs.sh capabilities  # 无需外部服务
 ./scripts/verify_logs.sh failure       # 预期业务错误
-./scripts/verify_logs.sh request       # 使用本地 IO 示例，调用真实分类器/模型
+./scripts/verify_logs.sh request       # 使用本地 IO 示例，按分支调用分类器/RAGFlow/模型
 ./scripts/verify_logs.sh logs          # 查看耗时
 ./scripts/verify_logs.sh logs 实际execution_id
 ```
 
 可追加端口，例如 `start 8082`、`request 8082 /实际路径/io_spec.md`。`python3 scripts/test_io_spec.py --check` 只校验 IO 文件，不发送请求。完整参数见 `./scripts/verify_logs.sh help`。
 
-若要使用 live 检索，显式加载 `.env` 后运行 JAR：
+也可显式加载 `.env` 后直接运行 JAR，两种启动方式均使用 RAGFlow：
 
 ```bash
 set -a
@@ -71,9 +71,11 @@ java -jar target/travel-agent.jar
 | `CLASSIFIER_URL` | 默认 `http://1.95.152.66:16000/mobilenetv3large` |
 | `CLASSIFIER_API_KEY` | 原始可用密钥，作为 `X-API-Key` 发送；平台 `E1-` 加密值不可直接使用 |
 | `CLASSIFIER_THRESHOLD` | 默认 0.7 |
-| `KOOSEARCH_MODE` | 默认 stub，固定等待 150ms；live 调用真实知识库 |
-| `KOOSEARCH_*` | 地址、知识库和认证，见 [Koo Search 配置](docs/koosearch.md) |
-| `CLASSIFIER_TIMEOUT/SEARCH_TIMEOUT/MODEL_TIMEOUT` | 整次调用超时，默认 30/30/60 秒 |
+| `RAGFLOW_URL/DATASET_ID/API_TOKEN` | 完整检索 URL、知识库 ID、Bearer Token；见 [RAGFlow 接入](docs/ragflow-travel-agent-integration.md#本工程接入与验证) |
+| `RAGFLOW_API_TOKEN_FILE` | 可选挂载文件，优先于 Token 环境变量，每次查询重读 |
+| `RAGFLOW_TOP_K/SIMILARITY_THRESHOLD/MIN_SIMILARITY` | 默认取 3 条，服务端阈值 0.2，客户端过滤低于 0.3 的片段 |
+| `RAGFLOW_TIMEOUT/RETRIES` | 整次检索默认 10 秒，连接异常或 HTTP 408/429/5xx 最多重试 2 次 |
+| `CLASSIFIER_TIMEOUT/MODEL_TIMEOUT` | 分类器 / 模型整次调用超时，默认 30/60 秒 |
 | `MODEL_ALLOWED_HOSTS` | 可选的模型目标主机限制，逗号分隔 |
 | `MAX_REQUEST_BYTES/MAX_IMAGE_BYTES/MAX_CONTEXT_CHARS` | 默认 16MiB / 10MiB / 16000 字符 |
 | `HEARTBEAT_SECONDS` | SSE 心跳间隔，默认 15 秒 |
@@ -136,10 +138,10 @@ SSE 顺序为 workflow_started、node_started、message、workflow_finished、en
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 116 项回归
+./mvnw verify                       # 全部 154 项回归
 ./scripts/verify_logs.sh test       # 日志/占位专项测试
 ```
 
-测试使用本机模拟服务，不消耗真实模型额度。Spring AI 的 ChatClient 通过自定义 CompatibleChatModel 处理现有两类模型协议和增量语义；MobileNet、live Koo Search、150ms 占位及取消传播均有回归覆盖。
+测试使用本机模拟服务，不消耗真实模型额度。Spring AI 的 ChatClient 通过自定义 CompatibleChatModel 处理现有两类模型协议和增量语义；MobileNet、RAGFlow、阶段日志及取消传播均有回归覆盖。RAGFlow 的空结果正常进入模型，HTTP/业务/格式错误返回 E5002，配置缺失返回 E5004；不把检索故障当作无资料。无需外部服务时可执行能力查询、输入错误验证或自动化测试。
 
 [部署指南](docs/deployment.md) 包含 Docker V2 镜像构建、asr-test2 下的 SWR 推送和 AgentArts 运行时配置；[验证指南](docs/verification.md) 保留实际验证摘要及仍待验收的云端链路。
