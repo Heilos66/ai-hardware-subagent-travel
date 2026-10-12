@@ -35,6 +35,8 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
   高置信度图片：validate → classify → search_image → model → total
   低置信度图片：validate → classify → model → total
   检索记录实际调用耗时（包含重试与提示词准备），同次请求 execution_id 相同。
+  workflow_ttft 从工作流开始计时，到模型首个正文/思考片段时打印一次。
+  stages_sum_ms + overhead_ms ≈ ttft_ms；model_to_first_token_ms 只包含模型首片前的耗时。
   ragflow_result 的 kept_chunks/empty_result 区分有资料与空结果，ragflow_failed 记录失败原因。
   .env 设置 RAGFLOW_LOG_CONTENT=true、MODEL_LOG_REQUEST=true 后重启，可查看脱敏正文和请求体。
   start 使用真实 RAGFlow；无知识库网络或凭据时，仍可执行 capabilities 和 failure。
@@ -166,9 +168,9 @@ PY
     (( $# <= 1 )) || die '用法：verify_logs.sh logs [execution_id]'
     [[ -f "$log_file" ]] || die "日志不存在，请先执行 start：$log_file"
     if command -v rg >/dev/null 2>&1; then
-      matches="$(rg --no-heading --color never 'workflow_(timing|diagnostic) ' "$log_file" || true)"
+      matches="$(rg --no-heading --color never 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
     else
-      matches="$(grep -E 'workflow_(timing|diagnostic) ' "$log_file" || true)"
+      matches="$(grep -E 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
     fi
     if [[ -n "${1:-}" ]]; then
       matches="$(printf '%s\n' "$matches" | grep -F -- " execution_id=$1 " || true)"

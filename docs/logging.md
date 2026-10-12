@@ -20,7 +20,7 @@
 
 ## 当前文旅 Java 工程如何对应
 
-应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing` 和 `workflow_diagnostic`，没有配置文件 Appender 或在请求线程里调用 LTS API。两类日志使用独立队列，队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/heilos/travel/WorkflowTiming.java)、[代码：WorkflowDiagnostics.java](../src/main/java/com/heilos/travel/WorkflowDiagnostics.java)
+应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing`、`workflow_ttft` 和 `workflow_diagnostic`，没有配置文件 Appender 或在请求线程里调用 LTS API。阶段耗时与 TTFT 共用计时队列，诊断日志使用独立队列；队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/heilos/travel/WorkflowTiming.java)、[代码：WorkflowDiagnostics.java](../src/main/java/com/heilos/travel/WorkflowDiagnostics.java)
 
 建议先使用平台内置日志上报完成验收，暂不为此引入额外 SDK。**文档明确确认运行时日志会进入 LTS，但本次没有云端样本证明当前镜像的 stdout 已被收录，也没有找到任意自定义日志文件均会自动采集的承诺。**保留现有控制台输出，并按以下过程核验平台采集结果；若只有平台日志而没有应用打点，再核对目标版本、采集范围和过滤规则。
 
@@ -44,6 +44,36 @@
 本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。为保持日志字段兼容，`search_mode` 固定为 `ragflow`；检索阶段记录读取 Token 文件、HTTP 请求、重试及提示词准备的实际耗时。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
 
 截至本次调研，运行时观测指南仍注明托管智能体的 Trace/Metric 查看功能未开放，而 API 结构里已经存在相应配置字段。因此不能仅凭开了日志开关或 API 中有字段，就认定会自动出现分类/检索/模型的链路图、P95 或 Token 图表；本项目当前提供的是日志打点，可在 LTS 另外分析。[运行时观测指南](https://support.huaweicloud.com/ops-agentarts/agentarts_14_0006.html)、[运行时 API 配置字段](https://support.huaweicloud.com/api-agentarts/ShowCoreRuntime.html)
+
+## 工作流 TTFT
+
+2026-10-11 新增。默认在 INFO 级别输出 `workflow_ttft`，不需要开启检索正文或模型请求体日志。以工作流订阅开始为起点，在模型适配器收到并解析出首个非空 `content` 或 `reasoning_content` 时记录，早于向调用方转发对应 SSE 消息。每次工作流最多一条，沿用同一个 `execution_id`。
+
+这里的 TTFT 覆盖工作流内的校验、分类、检索、提示词准备及模型首片等待，不包含客户端到 AgentArts/应用的入站网络耗时，也不包含向客户端发送首片的网络耗时。接口无法观测模型内部单个 token 的生成时刻，因此使用首个有效响应片段的接收时刻。只有角色的空片段、心跳、usage 及结束标记不触发计时；思考先到时，`first_token_type=reasoning_content`。
+
+| 字段 | 含义 |
+| --- | --- |
+| `ttft_ms` | 工作流开始到首个有效模型片段的毫秒数 |
+| `validate_ms` | 参数校验阶段；与同请求的 validate 日志一致 |
+| `classify_ms` | 分类阶段；未走该分支为 0 |
+| `search_text_ms` / `search_image_ms` | 对应检索阶段，包含重试及提示词准备；未执行的分支为 0 |
+| `model_to_first_token_ms` | model 阶段开始至首个有效片段，包含请求准备、发送和等待 |
+| `stages_sum_ms` | 上面各阶段与 model_to_first_token_ms 的合计 |
+| `overhead_ms` | TTFT 中未归入上述阶段的时间，例如工作流初始化及进入首个阶段前的开销 |
+| `first_token_type` | content、reasoning_content 或 content_and_reasoning |
+| `response_mode` | sse 或 json；JSON 回退要等完整响应接收解析后才能记录，不能代表真实流式首 token 延迟 |
+
+公式为 `validate_ms + classify_ms + search_text_ms + search_image_ms + model_to_first_token_ms ≈ stages_sum_ms`，以及 `stages_sum_ms + overhead_ms ≈ ttft_ms`。统一使用单调时钟，阶段交接共享同一个计时点；字段保留三位小数，可能存在微小舍入误差。
+
+以下为示意值，所有信息实际在同一行：
+
+```text
+workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80.0 search_text_ms=0.0 search_image_ms=150.0 model_to_first_token_ms=765.0 stages_sum_ms=997.0 overhead_ms=3.0 first_token_type=reasoning_content response_mode=sse search_mode=ragflow
+```
+
+这条日志在模型还在继续输出时就产生。原有 `stage=model` 仍记录整个模型阶段，`stage=total` 仍记录完整工作流，不应将这些完整耗时再加进 TTFT。首片前失败/超时/取消以及能力查询不产生 TTFT；首片后失败/取消保留已产生的 TTFT，最终成败仍以阶段/total 日志和 SSE 结束帧为准。
+
+本地执行 `./scripts/verify_logs.sh logs 实际execution_id` 会同时显示 TTFT、阶段耗时和诊断记录；云端按 `workflow_ttft` 与 execution_id 搜索。TTFT 不包含问题、知识正文或凭据，使用现有非阻塞异步日志队列，日志故障不会中断模型流。
 
 ## 检索与模型请求诊断日志
 

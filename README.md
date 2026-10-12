@@ -133,6 +133,8 @@ SSE 顺序为 workflow_started、node_started、message、workflow_finished、en
 
 每个实际阶段结束后输出 workflow_timing，包含 execution_id、stage、status、elapsed_ms、search_mode。按 execution_id 关联 SSE 与日志；total 为服务端工作流总耗时。所有耗时记录为 INFO，失败/取消分别用 status=failed/cancelled 表示。
 
+模型收到首个非空正文或思考片段时，立即输出一次 `workflow_ttft`。`ttft_ms` 从工作流开始计时，同一行包含校验、分类、检索和 `model_to_first_token_ms`，便于核对 `stages_sum_ms + overhead_ms ≈ ttft_ms`。原来的 `stage=model` 仍表示模型阶段完整耗时，不能用它代替首片等待耗时。TTFT 默认开启、无需正文日志开关，日志脚本已支持筛选；字段和示例见 [TTFT 说明](docs/logging.md#工作流-ttft)。
+
 workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成功/失败、返回和保留数量、文档名及相似度，不记录正文。设置 `RAGFLOW_LOG_CONTENT=true` 可查看原始检索片段，`MODEL_LOG_REQUEST=true` 可查看包含最终知识上下文的模型请求体。日志会隐藏已知凭据字段/值和图片数据，限制正文长度；详见 [诊断日志](docs/logging.md#检索与模型请求诊断日志)。环境变量变更后重启服务；AgentArts 需发布配置并调用对应版本。
 
 耗时和诊断各自异步输出，队列满时丢弃以避免日志写入阻塞业务线程。诊断序列化和脱敏仍有处理开销，正文开关默认关闭。
@@ -144,7 +146,7 @@ workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成�
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 177 项回归
+./mvnw verify                       # 全部 189 项回归
 ./scripts/verify_logs.sh test       # 耗时与诊断日志专项测试
 ```
 

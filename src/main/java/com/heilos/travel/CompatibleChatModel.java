@@ -119,18 +119,28 @@ final class CompatibleChatModel implements ChatModel {
                           AgentException.model("模型服务返回HTTP " + reply.statusCode().value()));
                     MediaType type =
                         reply.headers().contentType().orElse(MediaType.APPLICATION_JSON);
-                    if (MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type)) {
+                    boolean streaming = MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type);
+                    Flux<ChatResponse> responses;
+                    if (streaming) {
                       StreamState state = new StreamState();
-                      return SseDecoder.decode(reply.bodyToFlux(DataBuffer.class))
+                      responses = SseDecoder.decode(reply.bodyToFlux(DataBuffer.class))
                           .takeUntil(event -> event.data().strip().equals("[DONE]"))
                           .concatMapIterable(state::accept, 1)
                           .concatWith(Flux.defer(state::finish));
-                    }
-                    return reply
+                    } else responses = reply
                         .bodyToMono(byte[].class)
                         .defaultIfEmpty(new byte[0])
                         .map(bytes -> normalize(Json.parse(bytes)))
                         .flux();
+                    // Observe the first parsed upstream token before Spring AI/SSE forwarding.
+                    return responses.doOnNext(part -> context
+                        .<WorkflowTiming>getOrEmpty(WorkflowTiming.class)
+                        .ifPresent(timing -> {
+                          var output = part.getResult().getOutput();
+                          timing.firstToken(!output.getText().isEmpty(),
+                              !((String) output.getMetadata().getOrDefault(REASONING_DELTA, "")).isEmpty(),
+                              streaming ? "sse" : "json");
+                        }));
                     // Every timeout uses the same deadline, even when chunks keep arriving.
                     // timeout() cancels the HTTP publisher before emitting the timeout error.
                   })

@@ -10,7 +10,9 @@
 ./mvnw verify
 ```
 
-预期 `BUILD SUCCESS`，177 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消及日志隔离；40 项 RAGFlow 专项用例覆盖检索协议、片段过滤、错误、重试总时限、取消和 Token 文件轮换。另有 4 项配置回归和 19 项诊断用例，验证缺失变量定位、结果与空结果区分、实际模型请求体、凭据/图片脱敏、日志截断、并发请求关联和日志失败隔离。
+预期 `BUILD SUCCESS`，189 项测试，failures/errors/skipped 均为 0。测试使用本机随机端口模拟服务，不读取实际业务凭据。覆盖三条路由、0.7 边界、模型参数透传、SSE 分片和结束标记、思考增量、超时/取消及日志隔离；40 项 RAGFlow 专项用例覆盖检索协议、片段过滤、错误、重试总时限、取消和 Token 文件轮换。另有 4 项配置回归和 19 项诊断用例，验证缺失变量定位、结果与空结果区分、实际模型请求体、凭据/图片脱敏、日志截断、并发请求关联和日志失败隔离。
+
+TTFT 另增加 12 项用例，并扩展原有路由/并发/日志故障测试：覆盖首个正文或思考片段、过滤空片段、在完整响应前打点、各阶段与 TTFT 的加总关系、JSON 回退及首片前后失败/超时/取消。
 
 仅检查日志相关改动可以执行 `./scripts/verify_logs.sh test`。Maven 可通过 `MAVEN_USER_HOME` 和 `MAVEN_REPO_LOCAL` 指定缓存目录，缓存齐全时使用 `test -o` / `build -o`。
 
@@ -39,6 +41,7 @@
 3. `message.data.text` 是正文增量，分别拼接 `reasoning_content`；模型阶段至少有多个实时片段时，才验证了增量传输。最终正文只汇总 text。
 4. 按 SSE 的 `execution_id` 查日志，每个实际阶段和 total 均有记录；错误和取消对应 failed/cancelled。真实调用未完成时中断客户端，检查上游取消和日志结果。
 5. 文本为 `validate → search_text → model → total`；高置信度且名称非空的图片增加 classify/search_image；视觉分支为 `validate → classify → model → total`。
+6. 在模型首个非空正文/思考片段到达时应有一条 `workflow_ttft`，无需等生成结束。核对此前各阶段 `_ms` 与阶段日志一致，`stages_sum_ms + overhead_ms ≈ ttft_ms`。模型阶段只取 `model_to_first_token_ms` 加总，不能取生成结束后的完整 model 耗时。字段与例子见 [TTFT 说明](logging.md#工作流-ttft)。
 
 能力查询只产生 validate、total。`failure` 故意发送非法 operation，收到预期业务错误时脚本返回 0。日志在 `target/local-logs/application.log`，按需执行 `logs 实际execution_id`。各阶段计时范围和云端查询见 [日志说明](logging.md)。在启动终端按 Ctrl+C 停止服务。
 
@@ -47,6 +50,8 @@
 若 AgentArts 返回“RAGFlow地址或知识库ID未配置”，先按 [配置排查](logging.md#ragflow-地址或知识库-id-未配置) 补齐运行时环境变量。新版本在启动日志 `ragflow_config` 和失败日志 `ragflow_failed` 输出配置是否存在；`attempts=0` 表示尚未请求 RAGFlow，不能按网络或知识库服务异常处理。
 
 2026-10-10 诊断改动已通过全部 177 项 Java 回归；最后的日志故障隔离调整另行通过 23 项配置/诊断回归并重新打包。最终 JAR 使用本机模拟 RAGFlow 与模型启动，分别验证缺少配置和配置正确两种场景：健康接口、SSE、真实 Logback 异步控制台输出、execution_id 关联及脚本筛选均通过，日志中的模型请求体与模拟服务实际收到的请求一致。本次诊断改动尚未构建或发布新镜像，也未修改 AgentArts 环境变量。
+
+2026-10-11 TTFT 改动已通过全部 189 项 Java 回归并打包。用最终 JAR 对接本机模拟 RAGFlow 和延迟流式模型，实际控制台仅产生一条首思考片段 TTFT；阶段合计与额外开销之和吻合，打点早于模型完整输出，日志筛选脚本能同时查看 TTFT、阶段和诊断日志。本次 TTFT 改动尚未构建/推送镜像或修改 AgentArts 运行时。
 
 ## IAM 运行时验证
 

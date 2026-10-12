@@ -87,6 +87,7 @@ final class WorkflowEvents {
                                   ? "failed"
                                   : "succeeded"))
               .contextWrite(context -> context
+                  .put(WorkflowTiming.class, state.timing)
                   .put(WorkflowDiagnostics.EXECUTION_ID, state.executionId)
                   .put(WorkflowDiagnostics.SECRETS, ConcurrentHashMap.<String>newKeySet()));
         });

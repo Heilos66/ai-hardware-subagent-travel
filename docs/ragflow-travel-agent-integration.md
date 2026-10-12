@@ -52,7 +52,7 @@ python3 scripts/test_io_spec.py --port 8080 --spec references/io_spec.md
 
 也可使用 `./scripts/verify_logs.sh start`：加载 .env 中的真实 RAGFlow 配置，默认端口 8081，并将日志保存到 target/local-logs/application.log。直接启动 JAR 的日志输出在终端。环境变量修改后重启服务；仅 Token 文件内容更新无需重启。没有知识库网络或凭据时可先测试能力查询和非法输入，正常文本/高置信度图片请求需要真实检索成功。
 
-真实接口可达后，分别以“兵马俑是什么时候发现的”“长信宫灯有什么特点”“唐三彩载乐骆驼俑是什么”“三星堆青铜人面具是什么”验证召回相关性，再验证高/低置信度图片路由。检查业务 code="0"、SSE 正文增量和最终正文一致，按 execution_id 核对 `search_mode=ragflow`、search_text/search_image、model 和 total 日志。当前 177 项本地测试验证了客户端协议、流程和诊断日志，不代表上述真实语料已完成验收。通过 `ragflow_result` 查看检索结果摘要；开启正文开关后可比对检索片段和最终模型请求，见 [日志说明](logging.md#检索与模型请求诊断日志)。
+真实接口可达后，分别以“兵马俑是什么时候发现的”“长信宫灯有什么特点”“唐三彩载乐骆驼俑是什么”“三星堆青铜人面具是什么”验证召回相关性，再验证高/低置信度图片路由。检查业务 code="0"、SSE 正文增量和最终正文一致，按 execution_id 核对 `search_mode=ragflow`、search_text/search_image、model 和 total 日志。当前 189 项本地测试验证了客户端协议、流程、诊断日志和 TTFT，不代表上述真实语料已完成验收。通过 `ragflow_result` 查看检索结果摘要；开启正文开关后可比对检索片段和最终模型请求，见 [日志说明](logging.md#检索与模型请求诊断日志)。
 
 部署到 AgentArts 时，使用包含对应代码的镜像，设置上述运行时变量，并按 [部署指南](deployment.md) 发布或切换到对应版本后，用新 Session ID 验证。`.env` 不会进入镜像，需单独配置运行时凭据。运行时须能路由到 172.16.0.154:9380，且仍可访问分类器和模型；见 [私网配置说明](agentarts-knowledge-network.md)。基础 RAGFlow 镜像已推送，版本见 [验证记录](verification.md#ragflow-接入验证2026-10-10)；本次新增诊断日志尚未构建或推送新镜像，未修改云端运行时。
 
