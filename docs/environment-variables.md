@@ -121,6 +121,8 @@ RAGFLOW_RERANK_CANDIDATES_COUNT=null
 
 ## 日志与 TTFT
 
+日志行首已在 Logback 中固定为北京时间，格式为 `yyyy-MM-dd HH:mm:ss.SSS`（如 `2026-10-12 11:06:37.956`），无需额外配置 `TZ` 或 JVM 时区参数。使用该格式需要部署包含这次日志配置修改的镜像。
+
 | 环境变量 | 是否必须 | 未配置时 | 作用与要求 |
 | --- | --- | --- | --- |
 | `RAGFLOW_LOG_CONTENT` | 选填 | `false` | `true` 时记录检索问题与原始 chunks 正文；默认只记录摘要 |

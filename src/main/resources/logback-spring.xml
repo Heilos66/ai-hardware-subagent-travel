@@ -1,4 +1,6 @@
 <configuration>
+  <!-- Display Beijing time consistently, independent of the host/JVM timezone. -->
+  <property name="LOG_DATEFORMAT_PATTERN" value="yyyy-MM-dd HH:mm:ss.SSS,Asia/Shanghai"/>
   <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
   <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
   <appender name="TIMING_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
