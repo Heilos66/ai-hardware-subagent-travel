@@ -66,7 +66,8 @@ class RagFlowIntegrationTest extends AgentTestSupport {
         .isEqualTo(Json.parse("""
             {"dataset_ids":["travel-kb"],"question":"兵马俑是什么时候发现的",
              "page":1,"page_size":3,"similarity_threshold":0.2,
-             "rerank_id":"bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible"}
+             "rerank_id":"bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible",
+             "knn_top_k":64,"knn_num_candidates":128,"rerank_candidates_count":32}
             """));
     var model = requests.getLast();
     assertThat(model.uri()).startsWith("/text/");
@@ -92,6 +93,9 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     assertThat(requests.getLast().uri()).startsWith("/" + model + "/");
     if (count == 3) {
       assertThat(requests.get(1).body().path("question").asText()).isEqualTo("检索关于兵马俑的文档");
+      assertThat(requests.get(1).body().path("knn_top_k").asInt()).isEqualTo(64);
+      assertThat(requests.get(1).body().path("knn_num_candidates").asInt()).isEqualTo(128);
+      assertThat(requests.get(1).body().path("rerank_candidates_count").asInt()).isEqualTo(32);
       assertThat(requests.getLast().body().path("messages").get(1).path("content").asText())
           .contains("兵马俑于1974年发现。", "图片识别候选名称：兵马俑");
     } else assertThat(requests).noneMatch(r -> r.uri().contains("retrieval"));
@@ -256,6 +260,86 @@ class RagFlowIntegrationTest extends AgentTestSupport {
   })
   void invalidLimitsFailAtStartup(String name, String value) {
     assertThatThrownBy(() -> ragflow(Map.of(name, value))).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void customCandidateCountsAreIndependentOfReturnedTopK() {
+    handler = this::retrievalOrDefault;
+    assertThat(result(run(input(), ragflow(Map.of(
+        "RAGFLOW_TOP_K", "2", "RAGFLOW_KNN_TOP_K", "96",
+        "RAGFLOW_KNN_NUM_CANDIDATES", "192", "RAGFLOW_RERANK_CANDIDATES_COUNT", "48"))))
+        .path("code").asText()).isEqualTo("0");
+    var body = requests.getFirst().body();
+    assertThat(body.path("page_size").asInt()).isEqualTo(2);
+    assertThat(body.path("knn_top_k").isIntegralNumber()).isTrue();
+    assertThat(body.path("knn_top_k").asInt()).isEqualTo(96);
+    assertThat(body.path("knn_num_candidates").asInt()).isEqualTo(192);
+    assertThat(body.path("rerank_candidates_count").asInt()).isEqualTo(48);
+    assertThat(body.has("use_rerank")).isFalse();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,reranker,true", "false,reranker,false", "true,,false", "false,,false"})
+  void rerankRequiresBothTheSwitchAndAnId(boolean enabled, String id, boolean sent) {
+    handler = this::retrievalOrDefault;
+    assertThat(result(run(input(), ragflow(Map.of(
+        "RAGFLOW_USE_RERANK", Boolean.toString(enabled), "RAGFLOW_RERANK_ID", id == null ? "" : id))))
+        .path("code").asText()).isEqualTo("0");
+    var body = requests.getFirst().body();
+    assertThat(body.has("rerank_id")).isEqualTo(sent);
+    assertThat(body.has("rerank_candidates_count")).isEqualTo(sent);
+    assertThat(body.path("knn_top_k").asInt()).isEqualTo(64);
+    assertThat(body.path("knn_num_candidates").asInt()).isEqualTo(128);
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = {
+    "RAGFLOW_KNN_TOP_K|knn_top_k|", "RAGFLOW_KNN_TOP_K|knn_top_k|null",
+    "RAGFLOW_KNN_NUM_CANDIDATES|knn_num_candidates|", "RAGFLOW_KNN_NUM_CANDIDATES|knn_num_candidates|NULL",
+    "RAGFLOW_RERANK_CANDIDATES_COUNT|rerank_candidates_count|",
+    "RAGFLOW_RERANK_CANDIDATES_COUNT|rerank_candidates_count| null "
+  }, delimiter = '|')
+  void explicitlyEmptyCandidateCountsAreOmittedIndividually(String variable, String field, String value) {
+    handler = this::retrievalOrDefault;
+    assertThat(result(run(input(), ragflow(Map.of(variable, value == null ? "" : value))))
+        .path("code").asText()).isEqualTo("0");
+    var body = requests.getFirst().body();
+    assertThat(body.has(field)).isFalse();
+    assertThat(body.has("rerank_id")).isTrue();
+    for (String other : List.of("knn_top_k", "knn_num_candidates", "rerank_candidates_count"))
+      if (!other.equals(field)) assertThat(body.path(other).isIntegralNumber()).isTrue();
+  }
+
+  @Test
+  void allCandidateCountsCanFallBackToTheServerDefaults() {
+    handler = this::retrievalOrDefault;
+    assertThat(result(run(input(), ragflow(Map.of(
+        "RAGFLOW_KNN_TOP_K", "null", "RAGFLOW_KNN_NUM_CANDIDATES", "null",
+        "RAGFLOW_RERANK_CANDIDATES_COUNT", "null"))))
+        .path("code").asText()).isEqualTo("0");
+    assertThat(requests.getFirst().body()).isEqualTo(Json.parse("""
+        {"dataset_ids":["travel-kb"],"question":"介绍这个展品","page":1,"page_size":3,
+         "similarity_threshold":0.2,"rerank_id":"bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible"}
+        """));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "-1", "1.5", "NaN", "2147483648", "private-invalid-value"})
+  void invalidCandidateCountsFailBeforeRequestsWithoutEchoingValues(String value) {
+    for (String variable : List.of("RAGFLOW_KNN_TOP_K", "RAGFLOW_KNN_NUM_CANDIDATES",
+        "RAGFLOW_RERANK_CANDIDATES_COUNT")) {
+      assertThatThrownBy(() -> ragflow(Map.of(variable, value)))
+          .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(variable)
+          .hasMessageNotContaining(value);
+    }
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void invalidRerankSwitchFailsAtStartup() {
+    assertThatThrownBy(() -> ragflow(Map.of("RAGFLOW_USE_RERANK", "private-invalid-value")))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("RAGFLOW_USE_RERANK")
+        .hasMessageNotContaining("private-invalid-value");
   }
 
 }

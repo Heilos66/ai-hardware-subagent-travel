@@ -41,7 +41,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     assertThat(requests.getFirst().body())
         .isEqualTo(
             Json.parse(
-                "{\"dataset_ids\":[\"travel-kb\"],\"question\":\"介绍这个展品\",\"page\":1,\"page_size\":3,\"similarity_threshold\":0.2}"));
+                "{\"dataset_ids\":[\"travel-kb\"],\"question\":\"介绍这个展品\",\"page\":1,\"page_size\":3,\"similarity_threshold\":0.2,\"knn_top_k\":64,\"knn_num_candidates\":128}"));
     var model = requests.getLast();
     assertThat(model.uri()).isEqualTo("/text/chat/completions?version=1");
     assertThat(model.headers())

@@ -26,11 +26,19 @@ public final class AgentSettings {
       String tokenFile,
       String datasetId,
       String rerankId,
+      boolean useRerank,
+      Integer knnTopK,
+      Integer knnNumCandidates,
+      Integer rerankCandidatesCount,
       int topK,
       double threshold,
       double minSimilarity,
       Duration timeout,
       int retries) {
+    boolean rerankEnabled() {
+      return useRerank && !rerankId.isEmpty();
+    }
+
     @Override
     public String toString() {
       return "RagFlow[redacted]";
@@ -45,6 +53,10 @@ public final class AgentSettings {
             value(env, "RAGFLOW_API_TOKEN_FILE", "").strip(),
             value(env, "RAGFLOW_DATASET_ID", "").strip(),
             value(env, "RAGFLOW_RERANK_ID", "").strip(),
+            bool(env, "RAGFLOW_USE_RERANK", true),
+            optionalPositiveInteger(env, "RAGFLOW_KNN_TOP_K", 64),
+            optionalPositiveInteger(env, "RAGFLOW_KNN_NUM_CANDIDATES", 128),
+            optionalPositiveInteger(env, "RAGFLOW_RERANK_CANDIDATES_COUNT", 32),
             integer(env, "RAGFLOW_TOP_K", 3, 50),
             number(env, "RAGFLOW_SIMILARITY_THRESHOLD", .2, 0, 1),
             number(env, "RAGFLOW_MIN_SIMILARITY", .3, 0, 1),
@@ -139,5 +151,20 @@ public final class AgentSettings {
   private static Duration duration(Environment env, String name, double fallback, double max) {
     double seconds = number(env, name, fallback, .000001, max);
     return Duration.ofNanos((long) (seconds * 1_000_000_000));
+  }
+
+  private static Integer optionalPositiveInteger(Environment env, String name, int fallback) {
+    String raw = env.getProperty(name);
+    if (raw == null) return fallback;
+    raw = raw.strip();
+    // Explicit blank/null omits the field; an absent variable uses our recommended default.
+    if (raw.isEmpty() || raw.equalsIgnoreCase("null")) return null;
+    try {
+      int value = Integer.parseInt(raw);
+      if (value > 0) return value;
+    } catch (NumberFormatException ignored) {
+      // Do not include the supplied value in configuration errors.
+    }
+    throw new IllegalArgumentException("配置必须为正整数、空值或null：" + name);
   }
 }

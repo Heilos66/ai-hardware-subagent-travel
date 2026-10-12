@@ -81,7 +81,7 @@ workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80
 
 | event | 默认记录 | 如何理解 |
 | --- | --- | --- |
-| `ragflow_config` | 地址/知识库 ID 是否已配置、ID 是否有效、Token 来源及正文开关状态 | 每次应用启动一次；不打印地址、ID 或 Token 的实际值 |
+| `ragflow_config` | 地址/知识库 ID 是否已配置、ID 是否有效、Token 来源、正文开关、重排开关与实际启用状态、三个候选数 | 每次应用启动一次；不打印地址、ID 或 Token 的实际值。候选数为 null 表示该字段不会发送 |
 | `ragflow_result` | succeeded、attempts、returned_chunks、kept_chunks、empty_result、保留片段的 ID/文档名/相似度/字符数 | 检索协议解析成功；kept_chunks=0 仍是成功的空结果，模型会使用无资料提示 |
 | `ragflow_failed` | failed、attempts、业务错误码、经过处理的错误原因和配置存在标记 | 与“没有命中”区分；不打印上游错误正文 |
 | `ragflow_content` | 默认关闭；开启后记录 question 和 RAGFlow 返回的 chunks | 包含客户端过滤前的片段，用于排查低分或空白片段被过滤 |

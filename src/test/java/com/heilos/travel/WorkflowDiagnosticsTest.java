@@ -286,12 +286,35 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   }
 
   @Test
-  void startupReportsPresenceOnly() {
+  void startupReportsPresenceAndDefaultRetrievalOptions() {
     var config = settings(Map.of("RAGFLOW_URL", "", "RAGFLOW_DATASET_ID", ""));
     new WorkflowDiagnostics(config).runtimeConfig();
     assertThat(event("ragflow_config").data().path("url_configured").asBoolean()).isFalse();
     assertThat(event("ragflow_config").data().path("dataset_id_valid").asBoolean()).isFalse();
+    assertThat(event("ragflow_config").data().path("use_rerank").asBoolean()).isTrue();
+    assertThat(event("ragflow_config").data().path("rerank_enabled").asBoolean()).isFalse();
+    assertThat(event("ragflow_config").data().path("knn_top_k").asInt()).isEqualTo(64);
+    assertThat(event("ragflow_config").data().path("knn_num_candidates").asInt()).isEqualTo(128);
+    assertThat(event("ragflow_config").data().path("rerank_candidates_count").isNull()).isTrue();
     assertThat(logs.toString()).doesNotContain("search-secret", "classifier-secret");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void startupRetrievalOptionsMatchFieldsActuallySent(boolean rerank) {
+    var config = settings(Map.of("RAGFLOW_USE_RERANK", Boolean.toString(rerank),
+        "RAGFLOW_RERANK_ID", "private-reranker-name", "RAGFLOW_KNN_TOP_K", "null",
+        "RAGFLOW_KNN_NUM_CANDIDATES", "256", "RAGFLOW_RERANK_CANDIDATES_COUNT", "48"));
+    new WorkflowDiagnostics(config).runtimeConfig();
+    assertThat(result(run(input(), config)).path("code").asText()).isEqualTo("0");
+    var logged = event("ragflow_config").data();
+    var sent = requests.getFirst().body();
+    assertThat(logged.path("rerank_enabled").asBoolean()).isEqualTo(sent.has("rerank_id"));
+    for (String field : List.of("knn_top_k", "knn_num_candidates", "rerank_candidates_count")) {
+      if (sent.has(field)) assertThat(logged.path(field)).isEqualTo(sent.path(field));
+      else assertThat(logged.path(field).isNull()).isTrue();
+    }
+    assertThat(logs.toString()).doesNotContain("private-reranker-name", "search-secret", "classifier-secret");
   }
 
   @ParameterizedTest

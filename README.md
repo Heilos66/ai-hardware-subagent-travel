@@ -13,6 +13,7 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 ├── scripts/           # IO、IAM 调用、日志验证脚本及客户端测试
 ├── docs/
 │   ├── deployment.md  # 镜像、SWR、AgentArts 部署
+│   ├── environment-variables.md # 环境变量用途、必填条件与默认值
 │   ├── verification.md # 验证步骤和已验证基线
 │   ├── logging.md     # 日志打点、AgentArts/LTS 保存与查看
 │   └── ragflow-travel-agent-integration.md # 当前 RAGFlow 接入与参考文档
@@ -64,7 +65,7 @@ java -jar target/travel-agent.jar
 
 ## 配置
 
-完整环境变量及默认值见 [.env.example](.env.example)。应用不自动加载环境文件；本地脚本负责加载，AgentArts 使用运行时环境变量。
+环境变量的用途、必填条件、默认值及配置示例见 [环境变量配置说明](docs/environment-variables.md)，完整模板见 [.env.example](.env.example)。应用不自动加载环境文件；本地脚本负责加载，AgentArts 使用运行时环境变量。
 
 | 配置 | 用途 |
 | --- | --- |
@@ -73,6 +74,8 @@ java -jar target/travel-agent.jar
 | `CLASSIFIER_THRESHOLD` | 默认 0.7 |
 | `RAGFLOW_URL/DATASET_ID/API_TOKEN` | 完整检索 URL、知识库 ID、Bearer Token；见 [RAGFlow 接入](docs/ragflow-travel-agent-integration.md#本工程接入与验证) |
 | `RAGFLOW_API_TOKEN_FILE` | 可选挂载文件，优先于 Token 环境变量，每次查询重读 |
+| `RAGFLOW_USE_RERANK/RAGFLOW_RERANK_ID` | 开关默认 true；ID 非空才发送重排参数，开关 false 时省略重排 ID 和候选数 |
+| `RAGFLOW_KNN_TOP_K/RAGFLOW_KNN_NUM_CANDIDATES/RAGFLOW_RERANK_CANDIDATES_COUNT` | 默认 64/128/32；候选规模独立于返回条数，显式空值或 null 时省略对应请求字段 |
 | `RAGFLOW_TOP_K/SIMILARITY_THRESHOLD/MIN_SIMILARITY` | 默认取 3 条，服务端阈值 0.2，客户端过滤低于 0.3 的片段 |
 | `RAGFLOW_TIMEOUT/RETRIES` | 整次检索默认 10 秒，连接异常或 HTTP 408/429/5xx 最多重试 2 次 |
 | `RAGFLOW_LOG_CONTENT/MODEL_LOG_REQUEST` | 默认 false；按需记录检索片段正文 / 最终模型请求体 |
@@ -146,7 +149,7 @@ workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成�
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 189 项回归
+./mvnw verify                       # 全部 210 项回归
 ./scripts/verify_logs.sh test       # 耗时与诊断日志专项测试
 ```
 

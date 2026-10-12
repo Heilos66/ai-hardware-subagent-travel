@@ -98,6 +98,12 @@ final class WorkflowDiagnostics {
     fields.put("dataset_id_valid", AgentSettings.validId(ragflow.datasetId()));
     fields.put("token_source", !ragflow.tokenFile().isEmpty() ? "file"
         : ragflow.token().isBlank() ? "missing" : "environment");
+    fields.put("use_rerank", ragflow.useRerank());
+    fields.put("rerank_enabled", ragflow.rerankEnabled());
+    fields.put("knn_top_k", ragflow.knnTopK());
+    fields.put("knn_num_candidates", ragflow.knnNumCandidates());
+    fields.put("rerank_candidates_count",
+        ragflow.rerankEnabled() ? ragflow.rerankCandidatesCount() : null);
     return fields;
   }
 

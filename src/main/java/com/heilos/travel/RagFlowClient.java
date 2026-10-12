@@ -48,7 +48,14 @@ final class RagFlowClient {
                 body.put("page", 1);
                 body.put("page_size", settings.topK());
                 body.put("similarity_threshold", settings.threshold());
-                if (!settings.rerankId().isEmpty()) body.put("rerank_id", settings.rerankId());
+                if (settings.knnTopK() != null) body.put("knn_top_k", settings.knnTopK());
+                if (settings.knnNumCandidates() != null)
+                  body.put("knn_num_candidates", settings.knnNumCandidates());
+                if (settings.rerankEnabled()) {
+                  body.put("rerank_id", settings.rerankId());
+                  if (settings.rerankCandidatesCount() != null)
+                    body.put("rerank_candidates_count", settings.rerankCandidatesCount());
+                }
                 // Leave keyword/vector weights at server defaults; keyword=false is not vector-only.
                 return token().flatMap(token ->
                     Mono.defer(() -> {
