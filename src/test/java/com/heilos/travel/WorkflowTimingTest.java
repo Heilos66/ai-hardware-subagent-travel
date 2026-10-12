@@ -65,7 +65,22 @@ class WorkflowTimingTest extends AgentTestSupport {
     assertThat(config.classifierUrl).isEqualTo("http://1.95.152.66:16000/mobilenetv3large");
     assertThat(config.classifierThreshold).isEqualTo(.7);
     assertThat(config.ragflow).isNotNull();
+    assertThat(config.ragflow.enabled()).isTrue();
     assertThat(config.ragflow.timeout()).isEqualTo(Duration.ofSeconds(10));
+  }
+
+  @Test
+  void disabledRetrievalKeepsStageAndTtftAccountingWithDistinctMode() {
+    var events = run(input(), settings(Map.of("RAGFLOW_ENABLED", "false")));
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    assertThat(requests).hasSize(1);
+    awaitTotals(1);
+    assertThat(logs).allMatch(line -> line.contains("search_mode=disabled"));
+    assertThat(logs.stream().map(line -> field(line, "stage")).toList())
+        .containsExactly("validate", "search_text", "model", "total");
+    assertThat(ttftLogs).hasSize(1);
+    assertThat(field(ttftLogs.getFirst(), "search_mode")).isEqualTo("disabled");
+    assertTtftComponents(ttftLogs.getFirst(), logs);
   }
 
   @ParameterizedTest

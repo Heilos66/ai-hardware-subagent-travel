@@ -264,8 +264,9 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     }
   }
 
-  @Test
-  void brokenAppenderDoesNotFailTheWorkflow() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void brokenAppenderDoesNotFailTheWorkflow(boolean retrievalEnabled) {
     var broken = new AppenderBase<ILoggingEvent>() {
       @Override
       public synchronized void doAppend(ILoggingEvent event) {
@@ -277,8 +278,10 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     broken.start();
     logger.addAppender(broken);
     try {
-      assertThat(result(run(input(), detailed())).path("code").asText()).isEqualTo("0");
-      assertThat(requests).hasSize(2);
+      var config = settings(Map.of("RAGFLOW_ENABLED", Boolean.toString(retrievalEnabled),
+          "RAGFLOW_LOG_CONTENT", "true", "MODEL_LOG_REQUEST", "true"));
+      assertThat(result(run(input(), config)).path("code").asText()).isEqualTo("0");
+      assertThat(requests).hasSize(retrievalEnabled ? 2 : 1);
     } finally {
       logger.detachAppender(broken);
       broken.stop();
@@ -289,6 +292,7 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   void startupReportsPresenceAndDefaultRetrievalOptions() {
     var config = settings(Map.of("RAGFLOW_URL", "", "RAGFLOW_DATASET_ID", ""));
     new WorkflowDiagnostics(config).runtimeConfig();
+    assertThat(event("ragflow_config").data().path("enabled").asBoolean()).isTrue();
     assertThat(event("ragflow_config").data().path("url_configured").asBoolean()).isFalse();
     assertThat(event("ragflow_config").data().path("dataset_id_valid").asBoolean()).isFalse();
     assertThat(event("ragflow_config").data().path("use_rerank").asBoolean()).isTrue();
@@ -297,6 +301,24 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     assertThat(event("ragflow_config").data().path("knn_num_candidates").asInt()).isEqualTo(128);
     assertThat(event("ragflow_config").data().path("rerank_candidates_count").isNull()).isTrue();
     assertThat(logs.toString()).doesNotContain("search-secret", "classifier-secret");
+  }
+
+  @Test
+  void disabledRetrievalIsLoggedAsSkippedRatherThanAnEmptyRemoteResult() {
+    var config = settings(Map.of("RAGFLOW_ENABLED", "false", "RAGFLOW_LOG_CONTENT", "true"));
+    new WorkflowDiagnostics(config).runtimeConfig();
+    var events = run(input(), config);
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    assertThat(event("ragflow_config").data().path("enabled").asBoolean()).isFalse();
+    assertThat(diagnostics()).extracting(Diagnostic::event)
+        .containsExactly("ragflow_config", "ragflow_skipped", "model_request");
+    var skipped = event("ragflow_skipped");
+    assertThat(skipped.executionId()).isEqualTo(executionId(events));
+    assertThat(skipped.data().path("status").asText()).isEqualTo("skipped");
+    assertThat(skipped.data().path("reason").asText()).isEqualTo("RAGFLOW_ENABLED=false");
+    assertThat(skipped.data().path("attempts").asInt()).isZero();
+    assertThat(skipped.data().path("kept_chunks").asInt()).isZero();
+    assertThat(logs.toString()).doesNotContain("介绍这个展品", "search-secret", "model-secret");
   }
 
   @ParameterizedTest

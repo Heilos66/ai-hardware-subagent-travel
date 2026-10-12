@@ -115,6 +115,33 @@ class RagFlowIntegrationTest extends AgentTestSupport {
   }
 
   @ParameterizedTest
+  @CsvSource({"false,0.7,text,1", "true,0.7,text,2", "true,0.69999,text_vision,2"})
+  void disabledRetrievalKeepsRoutesAndStreamingWithoutReadingTokenFile(
+      boolean image, String confidence, String model, int calls, @TempDir Path directory) {
+    handler = r -> r.uri().equals("/classifier") ? classification(confidence) : retrievalOrDefault(r);
+    var input = input();
+    if (image) input.put("image_url", List.of("https://image.test/exhibit.jpg"));
+    var config = ragflow(Map.of("RAGFLOW_ENABLED", "false", "RAGFLOW_API_TOKEN", "",
+        "RAGFLOW_API_TOKEN_FILE", directory.resolve("missing-token").toString()));
+    var events = run(input, config);
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    assertThat(requests).hasSize(calls).noneMatch(r -> r.uri().contains("retrieval"));
+    if (image) assertThat(requests.getFirst().uri()).isEqualTo("/classifier");
+    var request = requests.getLast();
+    assertThat(request.uri()).startsWith("/" + model + "/");
+    assertThat(request.body().path("stream").asBoolean()).isTrue();
+    var content = request.body().path("messages").get(1).path("content");
+    if (model.equals("text")) {
+      assertThat(content.asText()).contains("当前没有可用的内部资料", "介绍这个展品")
+          .doesNotContain("1974", "资料 1：");
+      if (image) assertThat(content.asText()).contains("图片识别候选名称：兵马俑");
+    } else assertThat(content.get(1).path("image_url").path("url").asText())
+        .isEqualTo("https://image.test/exhibit.jpg");
+    assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
+        .containsExactly("", "这是", "秦代陶俑。");
+  }
+
+  @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void genuineEmptyOrFilteredResultsContinueWithEmptyContext(boolean filtered) {
     handler = r -> r.uri().contains("retrieval")

@@ -21,6 +21,7 @@ public final class AgentSettings {
   final int diagnosticLogMaxChars;
 
   record RagFlow(
+      boolean enabled,
       String url,
       String token,
       String tokenFile,
@@ -48,6 +49,7 @@ public final class AgentSettings {
   public AgentSettings(Environment env) {
     ragflow =
         new RagFlow(
+            bool(env, "RAGFLOW_ENABLED", true),
             url(env, "RAGFLOW_URL", ""),
             value(env, "RAGFLOW_API_TOKEN", ""),
             value(env, "RAGFLOW_API_TOKEN_FILE", "").strip(),

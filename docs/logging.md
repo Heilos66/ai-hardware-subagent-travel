@@ -43,7 +43,7 @@
 | 高置信度图片，且识别名称非空 | `validate → classify → search_image → model → total` |
 | 低置信度图片 | `validate → classify → model → total` |
 
-本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。为保持日志字段兼容，`search_mode` 固定为 `ragflow`；检索阶段记录读取 Token 文件、HTTP 请求、重试及提示词准备的实际耗时。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
+本项目的所有耗时记录都是 INFO 级别，成功/失败/取消由 `status=succeeded/failed/cancelled` 区分，筛选 ERROR 级别会漏掉这些记录。`search_mode` 表示配置的检索模式：默认 `ragflow`，设 `RAGFLOW_ENABLED=false` 时为 `disabled`，同样适用于 TTFT 日志。真实检索阶段记录读取 Token 文件、HTTP 请求、重试及提示词准备的耗时；disabled 时仅记录跳过处理及提示词准备，不增加模拟等待。一次请求应有一条 total；异步日志可能略晚于 SSE 结束到达。[本地实现和验证说明](../README.md#阶段耗时日志)
 
 截至本次调研，运行时观测指南仍注明托管智能体的 Trace/Metric 查看功能未开放，而 API 结构里已经存在相应配置字段。因此不能仅凭开了日志开关或 API 中有字段，就认定会自动出现分类/检索/模型的链路图、P95 或 Token 图表；本项目当前提供的是日志打点，可在 LTS 另外分析。[运行时观测指南](https://support.huaweicloud.com/ops-agentarts/agentarts_14_0006.html)、[运行时 API 配置字段](https://support.huaweicloud.com/api-agentarts/ShowCoreRuntime.html)
 
@@ -83,8 +83,9 @@ workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80
 
 | event | 默认记录 | 如何理解 |
 | --- | --- | --- |
-| `ragflow_config` | 地址/知识库 ID 是否已配置、ID 是否有效、Token 来源、正文开关、重排开关与实际启用状态、三个候选数 | 每次应用启动一次；不打印地址、ID 或 Token 的实际值。候选数为 null 表示该字段不会发送 |
+| `ragflow_config` | enabled、地址/知识库 ID 是否已配置、ID 是否有效、Token 来源、正文开关、重排开关与实际启用状态、三个候选数 | 每次应用启动一次；enabled=false 表示跳过真实检索，其余检索选项在 enabled=true 时使用。不打印地址、ID 或 Token 的实际值。候选数为 null 表示该字段不会发送 |
 | `ragflow_result` | succeeded、attempts、returned_chunks、kept_chunks、empty_result、保留片段的 ID/文档名/相似度/字符数 | 检索协议解析成功；kept_chunks=0 仍是成功的空结果，模型会使用无资料提示 |
+| `ragflow_skipped` | status=skipped、reason=RAGFLOW_ENABLED=false、attempts=0、kept_chunks=0 | 测试开关关闭检索；返回空资料继续模型调用，不代表实际查询成功或未命中。视觉分支本身不检索，不产生此事件 |
 | `ragflow_failed` | failed、attempts、业务错误码、经过处理的错误原因和配置存在标记 | 与“没有命中”区分；不打印上游错误正文 |
 | `ragflow_content` | 默认关闭；开启后记录 question 和 RAGFlow 返回的 chunks | 包含客户端过滤前的片段，用于排查低分或空白片段被过滤 |
 | `model_request` | model、type、provider、stream、body_logged | 默认只记录摘要；开启后附加最终请求 body。记录发生在调用前，不代表模型调用已成功 |
@@ -128,7 +129,7 @@ RAGFLOW_RERANK_ID=bge-reranker-v2-m3@maas-hw@OpenAI-API-Compatible
 
 保存环境配置并发布/切换目标运行时版本后，用新的 Session ID 调用。修复缺失变量本身无需修改代码或重建原 RAGFlow 镜像；要看到本次新增诊断日志，需要另外部署包含这些改动的新镜像。在新版本启动日志核对 `url_configured=true`、`dataset_id_configured=true`、`dataset_id_valid=true`、`token_source=environment/file`。这仅证明配置存在，Token 是否有效和私网是否可达仍需实际检索验证。
 
-若 `ragflow_failed` 中 `attempts=0` 且配置标记为 false，先修复配置；有请求尝试后再按 HTTP 状态或超时错误排查鉴权/网络。运行时需能访问 `172.16.0.154:9380`，网络说明见 [知识库网络文档](agentarts-knowledge-network.md)。
+若 `ragflow_failed` 中 `attempts=0` 且配置标记为 false，先修复配置；有请求尝试后再按 HTTP 状态或超时错误排查鉴权/网络。运行时需能访问 `RAGFLOW_URL` 选定的私网 `172.16.0.154:9380` 或公网 `1.95.220.19:9380`；完整 URL 与切换方式见 [环境变量说明](environment-variables.md#公网与私网地址切换)。
 
 ## LTS 如何保存日志
 

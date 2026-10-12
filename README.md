@@ -2,7 +2,7 @@
 
 Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArts 高代码运行时，不依赖巫山框架。
 
-保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索统一使用 RAGFlow，接入文档中的 travel_kb，真实私网连通性仍待云端验收。
+保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索默认使用 RAGFlow，接入文档中的 travel_kb，通过 `RAGFLOW_URL` 配置私网或公网地址。测试时可设 `RAGFLOW_ENABLED=false`，跳过检索并以空资料继续模型调用。
 
 ## 目录
 
@@ -52,7 +52,7 @@ test -f .env || cp .env.example .env
 
 可追加端口，例如 `start 8082`、`request 8082 /实际路径/io_spec.md`。`python3 scripts/test_io_spec.py --check` 只校验 IO 文件，不发送请求。完整参数见 `./scripts/verify_logs.sh help`。
 
-也可显式加载 `.env` 后直接运行 JAR，两种启动方式均使用 RAGFlow：
+也可显式加载 `.env` 后直接运行 JAR，两种启动方式均遵循 `RAGFLOW_ENABLED` 开关：
 
 ```bash
 set -a
@@ -72,7 +72,8 @@ java -jar target/travel-agent.jar
 | `CLASSIFIER_URL` | 默认 `http://1.95.152.66:16000/mobilenetv3large` |
 | `CLASSIFIER_API_KEY` | 原始可用密钥，作为 `X-API-Key` 发送；平台 `E1-` 加密值不可直接使用 |
 | `CLASSIFIER_THRESHOLD` | 默认 0.7 |
-| `RAGFLOW_URL/DATASET_ID/API_TOKEN` | 完整检索 URL、知识库 ID、Bearer Token；见 [RAGFlow 接入](docs/ragflow-travel-agent-integration.md#本工程接入与验证) |
+| `RAGFLOW_ENABLED` | 默认 true；测试时设 false，不调用知识库、不读取 Token 文件，返回空检索结果继续模型调用 |
+| `RAGFLOW_URL/DATASET_ID/API_TOKEN` | 完整检索 URL、知识库 ID、Bearer Token；公网 URL 为 `http://1.95.220.19:9380/api/v1/retrieval`，私网及切换方式见 [环境变量说明](docs/environment-variables.md#公网与私网地址切换) |
 | `RAGFLOW_API_TOKEN_FILE` | 可选挂载文件，优先于 Token 环境变量，每次查询重读 |
 | `RAGFLOW_USE_RERANK/RAGFLOW_RERANK_ID` | 开关默认 true；ID 非空才发送重排参数，开关 false 时省略重排 ID 和候选数 |
 | `RAGFLOW_KNN_TOP_K/RAGFLOW_KNN_NUM_CANDIDATES/RAGFLOW_RERANK_CANDIDATES_COUNT` | 默认 64/128/32；候选规模独立于返回条数，显式空值或 null 时省略对应请求字段 |
@@ -149,7 +150,7 @@ workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成�
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 210 项回归
+./mvnw verify                       # 全部 217 项回归
 ./scripts/verify_logs.sh test       # 耗时与诊断日志专项测试
 ```
 

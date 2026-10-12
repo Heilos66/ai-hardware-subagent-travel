@@ -43,7 +43,7 @@ SWR 基础版需要 Docker V2 清单，本机曾用 `--load` 导出 OCI index，
 - 镜像默认 Java 启动命令、8080 端口和 `/ping` 健康检查。
 - `.env.example` 中需要的环境变量；分类器地址为 `http://1.95.152.66:16000/mobilenetv3large`，使用可用的 `CLASSIFIER_API_KEY`。
 - 知识库统一使用 RAGFlow，检索必需 `RAGFLOW_URL`、`RAGFLOW_DATASET_ID` 和有效 Token（环境变量或挂载文件）；重排由 `RAGFLOW_USE_RERANK` 与 `RAGFLOW_RERANK_ID` 共同控制，候选数默认 64/128/32，回滚到服务端默认需显式设置 null，具体见 [RAGFlow 接入](ragflow-travel-agent-integration.md#本工程接入与验证)。Token 在运行时注入，不能依赖本机 .env 随镜像上传。
-- 运行时需能访问 `172.16.0.154:9380`，私网配置见 [网络说明](agentarts-knowledge-network.md)；同时验证 MobileNet、模型 endpoint 的出站网络。
+- 通过 `RAGFLOW_URL` 选择私网 `http://172.16.0.154:9380/api/v1/retrieval` 或公网 `http://1.95.220.19:9380/api/v1/retrieval`。运行时需能访问选定地址，同时验证 MobileNet、模型 endpoint 的出站网络。切换地址只需更新环境变量并发布对应运行时配置，无需重建镜像；真实检索需保持 `RAGFLOW_ENABLED=true`。详见 [网络说明](agentarts-knowledge-network.md)。
 - 入站认证、日志记录及 LTS 授权，日志查看见 [日志说明](logging.md)。
 
 上述平台配置应来自当前运行时；已有环境变量优先于镜像默认值。[部署说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_031.html)

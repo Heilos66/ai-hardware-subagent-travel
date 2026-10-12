@@ -65,6 +65,12 @@ final class WorkflowDiagnostics {
       emit(context, "ragflow_content", () -> Map.of("question", query, "chunks", rawChunks), token);
   }
 
+  void retrievalSkipped(ContextView context) {
+    emit(context, "ragflow_skipped", () -> Map.of(
+        "status", "skipped", "reason", "RAGFLOW_ENABLED=false", "attempts", 0,
+        "kept_chunks", 0));
+  }
+
   void retrievalFailure(ContextView context, int attempts, Throwable error) {
     emit(context, "ragflow_failed", () -> {
       var fields = configuration();
@@ -93,6 +99,7 @@ final class WorkflowDiagnostics {
   private Map<String, Object> configuration() {
     var ragflow = settings.ragflow;
     Map<String, Object> fields = new LinkedHashMap<>();
+    fields.put("enabled", ragflow.enabled());
     fields.put("url_configured", !ragflow.url().isEmpty());
     fields.put("dataset_id_configured", !ragflow.datasetId().isEmpty());
     fields.put("dataset_id_valid", AgentSettings.validId(ragflow.datasetId()));

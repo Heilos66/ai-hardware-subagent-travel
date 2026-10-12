@@ -48,15 +48,16 @@ CLASSIFIER_URL=http://1.95.152.66:16000/mobilenetv3large
 
 RAGFlow Token 填原始值，不加 `Bearer ` 前缀，代码会添加请求头。分类器密钥与 RAGFlow Token 分别用于不同服务，平台 `E1-` 加密值不能直接作为这些凭据。模型凭据由每次请求的 `model_config.auth_token` 提供，不在以上环境变量中。
 
-这个地址位于私网，运行时还需能访问 `172.16.0.154:9380`；变量填写正确不等于网络已连通，见 [知识库网络说明](agentarts-knowledge-network.md)。
+上例使用私网地址，也可将 `RAGFLOW_URL` 改为公网完整 URL `http://1.95.220.19:9380/api/v1/retrieval`。运行时需能访问所选地址，变量填写正确不等于网络已连通，见 [知识库网络说明](agentarts-knowledge-network.md)。
 
 ## RAGFlow 知识检索
 
-纯文本请求，以及图片分类名称非空且置信度达到阈值的请求，会执行检索。其余图片走视觉模型，不执行检索，但仍先调用分类器。
+默认情况下，纯文本请求，以及图片分类名称非空且置信度达到阈值的请求，会执行检索。其余图片走视觉模型，不执行检索，但仍先调用分类器。下表检索地址、知识库 ID 和 Token 的必填要求适用于 `RAGFLOW_ENABLED=true`。
 
 | 环境变量 | 是否必须 | 未配置时 | 作用与要求 |
 | --- | --- | --- | --- |
-| `RAGFLOW_URL` | 检索必填 | 空，检索返回 E5004 | 完整检索接口 URL，包含 `/api/v1/retrieval`；不能只填主机或 `/api/v1`。当前值见上方示例 |
+| `RAGFLOW_ENABLED` | 选填 | `true` | 是否调用真实 RAGFlow；false 时立即返回空检索结果、继续模型问答，不发送检索请求、不读取 Token 文件，不增加模拟等待 |
+| `RAGFLOW_URL` | 检索必填 | 空，检索返回 E5004 | 完整 HTTP(S) 检索 URL，支持私网或公网地址；需包含 `/api/v1/retrieval`，不能只填 IP、主机或 `/api/v1`。代码直接使用此值，不自动追加路径 |
 | `RAGFLOW_DATASET_ID` | 检索必填 | 空，检索返回 E5004 | 作为 `dataset_ids` 数组中的唯一知识库 ID；1～64 位字母、数字、下划线或连字符 |
 | `RAGFLOW_API_TOKEN` | 条件必填 | 空 | 没有使用 Token 文件时必填；作为 `Authorization: Bearer <Token>` 发送。与 AgentArts 入口密钥、模型密钥不同 |
 | `RAGFLOW_API_TOKEN_FILE` | 选填 | 不读文件，使用环境 Token | 运行时内可读的 UTF-8 Token 文件路径，优先于 `RAGFLOW_API_TOKEN`；每次检索重读，文件不存在、不可读或内容无效时返回 E5004，不回退到环境 Token |
@@ -72,6 +73,40 @@ RAGFlow Token 填原始值，不加 `Bearer ` 前缀，代码会添加请求头�
 | `RAGFLOW_RETRIES` | 选填 | `2` 次 | 整数 0～2；连接异常或 HTTP 408/429/5xx 的额外重试次数；0 表示不重试，2 表示最多请求 3 次，仍受总时限约束 |
 
 例如 `RAGFLOW_TOP_K=3`、服务端阈值 0.2、客户端阈值 0.3 时，向服务端请求一页 3 条结果，再剔除空正文和低于 0.3 的片段，因此最终可能少于 3 条，甚至为 0。空结果会继续模型问答；检索失败不会当作空结果继续。
+
+### 公网与私网地址切换
+
+沿用一个环境变量 `RAGFLOW_URL`，按运行时网络选择完整地址：
+
+| 访问方式 | `RAGFLOW_URL` |
+| --- | --- |
+| 私网 | `http://172.16.0.154:9380/api/v1/retrieval` |
+| 公网 | `http://1.95.220.19:9380/api/v1/retrieval` |
+
+公网访问配置示例：
+
+```dotenv
+RAGFLOW_ENABLED=true
+RAGFLOW_URL=http://1.95.220.19:9380/api/v1/retrieval
+```
+
+继续配置该知识库的 `RAGFLOW_DATASET_ID` 和有效 `RAGFLOW_API_TOKEN`（或 Token 文件）。本地修改 `.env` 后重启；AgentArts 修改运行时环境变量后发布/切换到对应版本。已发布镜像支持此配置，无需重新构建。应用只请求选定地址，不自动在公网与私网之间回退；若 `RAGFLOW_ENABLED=false`，仍会跳过检索。
+
+公网地址由用户于 2026-10-12 提供，本次未发起真实检索，不代表已验证其网络连通性和鉴权。
+
+### 跳过真实检索进行测试
+
+在本地 `.env` 或 AgentArts 运行时环境变量中设置：
+
+```dotenv
+RAGFLOW_ENABLED=false
+```
+
+此时无需填写 RAGFlow 地址、知识库 ID、Token 或 Token 文件。应用会沿用空结果提示词；高置信度图片仍经分类器后调用文本模型，低置信度图片仍走视觉模型。模型配置和图片分类器凭据按原有规则提供。已填写配置的格式校验仍在启动时执行，例如非法 URL、数值或布尔值仍会报配置错误。
+
+启动日志 `ragflow_config` 显示 `enabled=false`。进入检索阶段的请求输出 `ragflow_skipped`，其中 `status=skipped`、`attempts=0`；不会输出真实检索的 `ragflow_result` 或 `ragflow_content`。耗时和 TTFT 日志的 `search_mode=disabled`，保留的 search_text/search_image 阶段仅表示跳过处理及提示词准备耗时。
+
+改为 `true` 或删除该变量可恢复真实检索，需要有效的 RAGFlow 配置。开关修改后重启本地进程，或发布/切换 AgentArts 运行时版本；首次使用此开关需要部署包含本次代码的新镜像。
 
 ### 候选数、返回条数与回滚
 

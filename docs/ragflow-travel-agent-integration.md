@@ -14,7 +14,7 @@
 
 | 变量 | 当前配置或默认行为 |
 | --- | --- |
-| `RAGFLOW_URL` | `http://172.16.0.154:9380/api/v1/retrieval`，必须是完整 HTTP(S) URL |
+| `RAGFLOW_URL` | 私网 `http://172.16.0.154:9380/api/v1/retrieval` 或公网 `http://1.95.220.19:9380/api/v1/retrieval`，必须是完整 HTTP(S) URL；通过环境变量选择，不自动切换 |
 | `RAGFLOW_DATASET_ID` | `e611c8e0c45111f19cb7ff060c22c24e` |
 | `RAGFLOW_API_TOKEN` | 部署时注入真实 Bearer Token |
 | `RAGFLOW_API_TOKEN_FILE` | 可选 UTF-8 文件，优先于环境 Token，每次查询异步重读；文件不可读时返回配置错误 |
@@ -33,6 +33,8 @@
 | `DIAGNOSTIC_LOG_MAX_CHARS` | 默认 16000，范围 256～65536；超出后输出带标记的 JSON 预览 |
 
 知识检索统一使用 RAGFlow，无需选择检索提供方；超时由 `RAGFLOW_TIMEOUT` 控制。
+
+2026-10-12 用户补充上述公网入口。现有代码和已发布镜像均支持 `RAGFLOW_URL` 配置，切换地址后重启/发布运行时配置即可；真实检索需保持 `RAGFLOW_ENABLED=true`。下方原始参考中的“无 EIP”和公网占位符属于提供方当时的部署记录，不代表当前公网地址不可配置。本次未对新公网入口进行真实连通性与鉴权验证。
 
 ### 请求参数与回滚
 
@@ -90,7 +92,7 @@ python3 scripts/test_io_spec.py --port 8080 --spec references/io_spec.md
 
 真实接口可达后，分别以“兵马俑是什么时候发现的”“长信宫灯有什么特点”“唐三彩载乐骆驼俑是什么”“三星堆青铜人面具是什么”验证召回相关性，再验证高/低置信度图片路由。检查业务 code="0"、SSE 正文增量和最终正文一致，按 execution_id 核对 `search_mode=ragflow`、search_text/search_image、model 和 total 日志。当前 210 项本地测试覆盖客户端协议、候选数/重排开关、流程、诊断日志和 TTFT，不代表上述真实语料已完成验收。通过 `ragflow_result` 查看检索结果摘要；开启正文开关后可比对检索片段和最终模型请求，见 [日志说明](logging.md#检索与模型请求诊断日志)。
 
-部署到 AgentArts 时，使用包含对应代码的镜像，设置上述运行时变量，并按 [部署指南](deployment.md) 发布或切换到对应版本后，用新 Session ID 验证。`.env` 不会进入镜像，需单独配置运行时凭据。运行时须能路由到 172.16.0.154:9380，且仍可访问分类器和模型；见 [私网配置说明](agentarts-knowledge-network.md)。基础 RAGFlow 镜像已推送，版本见 [验证记录](verification.md#ragflow-接入验证2026-10-10)；本次候选数与重排开关改动尚未构建或推送新镜像，未修改云端运行时。
+部署到 AgentArts 时，使用包含对应代码的镜像，设置上述运行时变量，并按 [部署指南](deployment.md) 发布或切换到对应版本后，用新 Session ID 验证。`.env` 不会进入镜像，需单独配置运行时凭据。运行时须能访问 `RAGFLOW_URL` 选定的私网或公网地址，且仍可访问分类器和模型；见 [网络配置说明](agentarts-knowledge-network.md)。
 
 ## 原始接入参考
 

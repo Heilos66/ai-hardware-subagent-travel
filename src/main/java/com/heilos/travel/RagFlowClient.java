@@ -31,6 +31,10 @@ final class RagFlowClient {
 
   Mono<List<ExternalServices.KnowledgeChunk>> search(String query) {
     return Mono.deferContextual(context -> {
+      if (!settings.enabled()) {
+        diagnostics.retrievalSkipped(context);
+        return Mono.just(List.of());
+      }
       AtomicInteger attempts = new AtomicInteger();
       return Mono.defer(
               () -> {

@@ -25,7 +25,7 @@ final class WorkflowEvents {
   Flux<String> stream(JsonNode payload) {
     return Flux.defer(
         () -> {
-          State state = new State();
+          State state = new State(settings.ragflow.enabled());
           Flux<String> body =
               agent
                   .run(payload)
@@ -185,8 +185,8 @@ final class WorkflowEvents {
     boolean failed;
     Map<String, Object> result;
 
-    State() {
-      timing = new WorkflowTiming(executionId);
+    State(boolean retrievalEnabled) {
+      timing = new WorkflowTiming(executionId, retrievalEnabled);
     }
   }
 }

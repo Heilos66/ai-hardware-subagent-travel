@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 final class WorkflowTiming {
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowTiming.class);
   private final String executionId;
+  private final String searchMode;
   private final long started = System.nanoTime();
   private final Map<String, Long> completedNanos = new HashMap<>();
   private String stage;
@@ -16,8 +17,9 @@ final class WorkflowTiming {
   private boolean finished;
   private boolean firstTokenReceived;
 
-  WorkflowTiming(String executionId) {
+  WorkflowTiming(String executionId, boolean retrievalEnabled) {
     this.executionId = executionId;
+    this.searchMode = retrievalEnabled ? "ragflow" : "disabled";
   }
 
   synchronized void startStage(String next) {
@@ -60,10 +62,10 @@ final class WorkflowTiming {
           "workflow_ttft execution_id={} ttft_ms={} validate_ms={} classify_ms={}"
               + " search_text_ms={} search_image_ms={} model_to_first_token_ms={}"
               + " stages_sum_ms={} overhead_ms={} first_token_type={} response_mode={}"
-              + " search_mode=ragflow",
+              + " search_mode={}",
           executionId, millis(ttft), millis(validate), millis(classify), millis(searchText),
           millis(searchImage), millis(modelFirst), millis(sum), millis(ttft - sum), type,
-          responseMode);
+          responseMode, searchMode);
     } catch (RuntimeException ignored) {
       // A failed TTFT log must not consume a token or interrupt the model stream.
     }
@@ -84,11 +86,12 @@ final class WorkflowTiming {
   private void log(String stage, String status, long elapsedNanos) {
     try {
       LOG.info(
-          "workflow_timing execution_id={} stage={} status={} elapsed_ms={} search_mode=ragflow",
+          "workflow_timing execution_id={} stage={} status={} elapsed_ms={} search_mode={}",
           executionId,
           stage,
           status,
-          millis(elapsedNanos));
+          millis(elapsedNanos),
+          searchMode);
     } catch (RuntimeException ignored) {
       // Instrumentation failures must not change SSE results or upstream cancellation.
     }

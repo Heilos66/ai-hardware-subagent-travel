@@ -1,6 +1,7 @@
 package com.heilos.travel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -15,11 +16,26 @@ class RagFlowConfigurationTest extends AgentTestSupport {
     assertThat(result(run(input(), new AgentSettings(env))).path("message").asText())
         .isEqualTo("RAGFlow地址未配置：RAGFLOW_URL");
     assertThat(requests).isEmpty();
+    env.setProperty("RAGFLOW_ENABLED", "false");
+    assertThat(result(run(input(), new AgentSettings(env))).path("code").asText()).isEqualTo("0");
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().uri()).startsWith("/text/");
+    requests.clear();
+    env.setProperty("RAGFLOW_ENABLED", "true");
+    assertThat(result(run(input(), new AgentSettings(env))).path("code").asText()).isEqualTo("E5004");
+    assertThat(requests).isEmpty();
     env.setProperty("RAGFLOW_URL", base + "/api/v1/retrieval");
     env.setProperty("RAGFLOW_DATASET_ID", "travel-kb");
     env.setProperty("RAGFLOW_API_TOKEN", "search-secret");
     assertThat(result(run(input(), new AgentSettings(env))).path("code").asText()).isEqualTo("0");
     assertThat(requests).hasSize(2);
+  }
+
+  @Test
+  void invalidRetrievalSwitchFailsClearly() {
+    assertThatThrownBy(() -> settings(Map.of("RAGFLOW_ENABLED", "invalid-switch-value")))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("RAGFLOW_ENABLED")
+        .hasMessageNotContaining("invalid-switch-value");
   }
 
   @ParameterizedTest

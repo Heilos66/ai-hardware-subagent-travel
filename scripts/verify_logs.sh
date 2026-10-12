@@ -11,7 +11,7 @@ usage() {
 
   start [端口]              加载 .env，以 RAGFlow 配置前台启动 JAR 并保存日志
   capabilities [端口]       查询能力；应有 validate、total 两条成功日志
-  request [端口] [IO文件]   发送 IO 请求，按业务分支调用真实分类器、RAGFlow 和模型
+  request [端口] [IO文件]   发送 IO 请求，按业务分支及检索开关调用分类器、RAGFlow 和模型
   failure [端口]            发送非法 operation；应有 validate、total 两条失败日志
   logs [execution_id]       查看全部或指定请求的耗时和检索/模型诊断日志
   test [Maven参数...]       运行耗时和诊断日志测试，无需真实业务凭据
@@ -39,7 +39,8 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
   stages_sum_ms + overhead_ms ≈ ttft_ms；model_to_first_token_ms 只包含模型首片前的耗时。
   ragflow_result 的 kept_chunks/empty_result 区分有资料与空结果，ragflow_failed 记录失败原因。
   .env 设置 RAGFLOW_LOG_CONTENT=true、MODEL_LOG_REQUEST=true 后重启，可查看脱敏正文和请求体。
-  start 使用真实 RAGFlow；无知识库网络或凭据时，仍可执行 capabilities 和 failure。
+  start 默认使用真实 RAGFlow；.env 设置 RAGFLOW_ENABLED=false 可跳过检索继续模型调用。
+  跳过时记录 ragflow_skipped，耗时/TTFT 日志显示 search_mode=disabled，无需知识库网络或凭据。
   请求尚未结束时在客户端按 Ctrl+C，可检查当前阶段及 total 的 cancelled 日志。
   start 终端按 Ctrl+C 停止服务。代码变更后先 build，再重启 start。
 HELP
