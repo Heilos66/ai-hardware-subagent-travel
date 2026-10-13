@@ -96,6 +96,18 @@ final class WorkflowDiagnostics {
     }, config.token());
   }
 
+  void modelFailure(ContextView context, Inputs.ModelConfig config,
+      ModelFailureDetails details, Throwable error) {
+    emit(context, "model_failed", () -> {
+      var fields = details.fields(error);
+      fields.put("model", config.model());
+      fields.put("type", config.type());
+      fields.put("provider", config.provider());
+      fields.put("code", error instanceof AgentException known ? known.code() : "E5003");
+      return fields;
+    }, config.token());
+  }
+
   private Map<String, Object> configuration() {
     var ragflow = settings.ragflow;
     Map<String, Object> fields = new LinkedHashMap<>();

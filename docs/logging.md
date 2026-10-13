@@ -90,6 +90,26 @@ workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80
 | `ragflow_content` | 默认关闭；开启后记录 question 和 RAGFlow 返回的 chunks | 包含客户端过滤前的片段，用于排查低分或空白片段被过滤 |
 | `model_request` | model、type、provider、stream、body_logged | 默认只记录摘要；开启后附加最终请求 body。记录发生在调用前，不代表模型调用已成功 |
 
+### 模型失败诊断
+
+模型调用失败时默认输出一条 `event=model_failed`，与请求、耗时和 SSE 终态共用 `execution_id`，无需开启 `MODEL_LOG_REQUEST`。对外错误码仍为 `E5003`；不会自动重试或改变图片路由。
+
+| 字段 | 含义 |
+| --- | --- |
+| `http_status` | 实际收到的上游 HTTP 状态；未收到响应头时为 null。200 也可能在后续解析或流中断时失败 |
+| `content_type` / `response_mode` | 上游内容类型；模式为 sse、json_or_other 或 unknown |
+| `request_id` | 从 x-request-id、x-openai-request-id、x-amzn-requestid、x-hw-request-id、request-id 依次取首个存在值 |
+| `retry_after` | 上游 Retry-After 原值，可能为秒数或 HTTP 日期；仅记录，不据此自动重试 |
+| `phase` | request 表示尚未收到响应头；response 表示已收到响应头，不代表正文完整 |
+| `token_received` / `text_received` | 是否已解析到正文或推理片段 / 是否已解析到正文；不代表客户端已经收到 |
+| `failure_kind` | http_error、dns_error、connect_timeout、connect_error、tls_error、timeout、invalid_response、stream_incomplete、empty_response、content_filter、upstream_error、request_error 或 response_error |
+| `error_type` / `root_cause_type` / `cause_types` | 原异常类型、根因类型、由外到内的异常类型链；最多 12 层，循环或超过上限时 cause_chain_truncated=true 且根因为 null |
+| `code` / `reason` | 对外业务错误码及应用生成的安全说明；不记录原始异常消息 |
+
+例如 `http_status=429`、`failure_kind=http_error` 表示上游返回限流状态；`http_status=null`、`failure_kind=connect_timeout` 表示未收到 HTTP 响应，连接建立超时；`http_status=200`、`failure_kind=stream_incomplete`、`text_received=true` 表示已有部分正文但流缺少结束标记。TLS 分类依据异常类型，不能据此单独判断证书、防火墙或代理中的具体原因。
+
+只采集以上响应头元数据，每个头最多 256 字符并清理控制字符，沿用现有凭据脱敏与整体日志长度限制。不记录上游错误正文、完整 URL、原始异常消息或堆栈。主动取消不会被记录为 model_failed，仍查看工作流 cancelled 终态。
+
 本地在 `.env`、云端在 AgentArts **运行时环境变量**中设置，重新启动相应服务/实例后生效：
 
 ```dotenv

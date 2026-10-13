@@ -68,6 +68,8 @@ final class CompatibleChatModel implements ChatModel {
   public Flux<ChatResponse> stream(Prompt prompt) {
     return Flux.deferContextual(
         context -> {
+          ModelFailureDetails failure = new ModelFailureDetails();
+          WorkflowDiagnostics diagnostics = new WorkflowDiagnostics(settings);
           long deadline = System.nanoTime() + settings.modelTimeout.toNanos();
           URI endpoint = config.endpoint();
           if (!settings.modelAllowedHosts.isEmpty()
@@ -110,10 +112,11 @@ final class CompatibleChatModel implements ChatModel {
                 config.token().toLowerCase(Locale.ROOT).startsWith("bearer ")
                     ? config.token()
                     : "Bearer " + config.token());
-          new WorkflowDiagnostics(settings).modelRequest(context, config, body);
+          diagnostics.modelRequest(context, config, body);
           return call.bodyValue(body)
               .exchangeToFlux(
                   reply -> {
+                    failure.response(reply.statusCode().value(), reply.headers().asHttpHeaders());
                     if (!reply.statusCode().is2xxSuccessful())
                       return Flux.error(
                           AgentException.model("模型服务返回HTTP " + reply.statusCode().value()));
@@ -133,20 +136,24 @@ final class CompatibleChatModel implements ChatModel {
                         .map(bytes -> normalize(Json.parse(bytes)))
                         .flux();
                     // Observe the first parsed upstream token before Spring AI/SSE forwarding.
-                    return responses.doOnNext(part -> context
+                    return responses.doOnNext(part -> {
+                      failure.token(part);
+                      context
                         .<WorkflowTiming>getOrEmpty(WorkflowTiming.class)
                         .ifPresent(timing -> {
                           var output = part.getResult().getOutput();
                           timing.firstToken(!output.getText().isEmpty(),
                               !((String) output.getMetadata().getOrDefault(REASONING_DELTA, "")).isEmpty(),
                               streaming ? "sse" : "json");
-                        }));
+                        });
+                    });
                     // Every timeout uses the same deadline, even when chunks keep arriving.
                     // timeout() cancels the HTTP publisher before emitting the timeout error.
                   })
               .timeout(
                   Mono.delay(settings.modelTimeout),
                   part -> Mono.delay(Duration.ofNanos(Math.max(0, deadline - System.nanoTime()))))
+              .doOnError(error -> diagnostics.modelFailure(context, config, failure, error))
               .onErrorMap(
                   e ->
                       e instanceof AgentException

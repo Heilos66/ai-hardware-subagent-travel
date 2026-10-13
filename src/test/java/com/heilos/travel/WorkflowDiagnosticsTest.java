@@ -89,6 +89,108 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   }
 
   @Test
+  void modelHttpFailureLogsMetadataWithoutChangingPublicError() {
+    http = org.springframework.web.reactive.function.client.WebClient.builder()
+        .exchangeFunction(request -> reactor.core.publisher.Mono.just(
+            org.springframework.web.reactive.function.client.ClientResponse
+                .create(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                .header("Content-Type", "application/json")
+                .header("x-request-id", "req-model-secret")
+                .header("Retry-After", "15")
+                .body("private-upstream-body")
+                .build())).build();
+    var events = run(input(), settings(Map.of("RAGFLOW_ENABLED", "false")));
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    assertThat(result(events).path("message").asText()).isEqualTo("模型服务返回HTTP 429");
+    var failure = event("model_failed");
+    assertThat(failure.executionId()).isEqualTo(executionId(events));
+    assertThat(failure.data().path("http_status").asInt()).isEqualTo(429);
+    assertThat(failure.data().path("request_id").asText()).isEqualTo("req-<REDACTED>");
+    assertThat(failure.data().path("retry_after").asText()).isEqualTo("15");
+    assertThat(failure.data().path("failure_kind").asText()).isEqualTo("http_error");
+    assertThat(failure.data().path("token_received").asBoolean()).isFalse();
+    assertThat(logs.toString()).doesNotContain("model-secret", "private-upstream-body");
+    assertThat(diagnostics().stream().filter(d -> d.event().equals("model_failed"))).hasSize(1);
+  }
+
+  @Test
+  void partialStreamFailureRecordsReceivedText() {
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r)
+        : Reply.sse(delta("部分回答", ""));
+    var events = run(input());
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    var failure = event("model_failed").data();
+    assertThat(failure.path("failure_kind").asText()).isEqualTo("stream_incomplete");
+    assertThat(failure.path("token_received").asBoolean()).isTrue();
+    assertThat(failure.path("text_received").asBoolean()).isTrue();
+    assertThat(failure.path("response_mode").asText()).isEqualTo("sse");
+    assertThat(failure.path("http_status").asInt()).isEqualTo(200);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"connect", "tls", "dns", "timeout", "json"})
+  void failuresPreserveCauseTypesButNeverRawExceptionMessages(String scenario) {
+    Throwable cause = switch (scenario) {
+      case "connect" -> new io.netty.channel.ConnectTimeoutException("secret-url");
+      case "tls" -> new javax.net.ssl.SSLHandshakeException("secret-url");
+      case "dns" -> new java.net.UnknownHostException("secret-url");
+      case "timeout" -> new java.util.concurrent.TimeoutException("secret-url");
+      default -> new IllegalArgumentException("secret-url");
+    };
+    http = org.springframework.web.reactive.function.client.WebClient.builder()
+        .exchangeFunction(request -> reactor.core.publisher.Mono.error(new RuntimeException(cause)))
+        .build();
+    var events = run(input(), settings(Map.of("RAGFLOW_ENABLED", "false")));
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    var failure = event("model_failed").data();
+    String expected = switch (scenario) {
+      case "connect" -> "connect_timeout";
+      case "tls" -> "tls_error";
+      case "dns" -> "dns_error";
+      case "timeout" -> "timeout";
+      default -> "invalid_response";
+    };
+    assertThat(failure.path("failure_kind").asText()).isEqualTo(expected);
+    assertThat(failure.path("root_cause_type").asText()).isEqualTo(cause.getClass().getSimpleName());
+    assertThat(failure.path("http_status").isNull()).isTrue();
+    assertThat(logs.toString()).doesNotContain("secret-url");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"timeout", "malformed"})
+  void responseFailureKeepsHttpStatusAndFailureCategory(String scenario) {
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r)
+        : new Reply(200, "application/json",
+            scenario.equals("timeout") ? Flux.never() : Flux.just("invalid-private-json"));
+    var events = run(input(), settings(Map.of("MODEL_TIMEOUT", "0.2")));
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    var failure = event("model_failed").data();
+    assertThat(failure.path("http_status").asInt()).isEqualTo(200);
+    assertThat(failure.path("failure_kind").asText())
+        .isEqualTo(scenario.equals("timeout") ? "timeout" : "invalid_response");
+    assertThat(failure.path("text_received").asBoolean()).isFalse();
+    assertThat(logs.toString()).doesNotContain("invalid-private-json");
+  }
+
+  @Test
+  void failureMetadataBoundsHeadersAndCyclicCauses() {
+    var details = new ModelFailureDetails();
+    var headers = new org.springframework.http.HttpHeaders();
+    headers.set("x-request-id", "a".repeat(300));
+    headers.set("Retry-After", "12\r\n34");
+    details.response(429, headers);
+    var error = new RuntimeException("private");
+    var cause = new RuntimeException(error);
+    error.initCause(cause);
+    var fields = details.fields(error);
+    assertThat((String) fields.get("request_id")).hasSize(256);
+    assertThat(fields.get("retry_after")).isEqualTo("12  34");
+    assertThat(fields.get("cause_chain_truncated")).isEqualTo(true);
+    assertThat(fields.get("root_cause_type")).isNull();
+    assertThat(fields.toString()).doesNotContain("private");
+  }
+
+  @Test
   void defaultLogsSummarizeResultsAndCorrelateWithoutBodies() {
     var events = run(input());
     assertThat(result(events).path("code").asText()).isEqualTo("0");
