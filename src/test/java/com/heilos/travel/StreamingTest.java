@@ -96,6 +96,20 @@ class StreamingTest extends AgentTestSupport {
     assertThat(result(run(input())).path("code").asText()).isEqualTo("E5003");
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"length", "tool_calls", "function_call", "unknown"})
+  void failedFinishCannotBeOverriddenByDoneOrStop(String reason) {
+    String terminal = "data: " + Json.write(Map.of("choices", List.of(Map.of(
+        "delta", Map.of(), "finish_reason", reason)))) + "\n\n";
+    String stop = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n";
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r)
+        : Reply.sse(terminal + stop + DONE);
+    var events = run(input());
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    assertThat(messages(events)).isEmpty();
+    assertThat(events.getLast().path("event").asText()).isEqualTo("end");
+  }
+
   @Test
   void reasoningOnlyFailsButIsDeliveredSeparately() {
     handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r) : Reply.sse(delta("", "分析片段") + DONE);

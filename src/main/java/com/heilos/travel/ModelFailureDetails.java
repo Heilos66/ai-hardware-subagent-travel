@@ -15,7 +15,7 @@ import org.springframework.http.HttpHeaders;
 /** Request-local diagnostics; never retain upstream bodies, URLs or exception messages. */
 final class ModelFailureDetails {
   private volatile Integer status;
-  private volatile String contentType, requestId, retryAfter;
+  private volatile String contentType, requestId, retryAfter, finishReason;
   private volatile boolean tokenReceived, textReceived;
 
   void response(int status, HttpHeaders headers) {
@@ -30,6 +30,10 @@ final class ModelFailureDetails {
       }
     }
     retryAfter = bounded(headers.getFirst("Retry-After"));
+  }
+
+  void finishReason(String reason) {
+    finishReason = bounded(reason);
   }
 
   void token(ChatResponse part) {
@@ -65,6 +69,9 @@ final class ModelFailureDetails {
     }
     if (kind == null && error instanceof AgentException) {
       kind = switch (error.getMessage()) {
+        case "回答因长度限制未完整生成" -> "length_truncated";
+        case "模型请求调用工具，当前流程不支持，回答未完成" -> "unsupported_tool_call";
+        case "模型返回未知结束原因，回答未完成" -> "unknown_finish_reason";
         case "模型流式响应中断，未收到结束标记" -> "stream_incomplete";
         case "模型响应message.content为空" -> "empty_response";
         case "模型回答被内容过滤" -> "content_filter";
@@ -87,6 +94,7 @@ final class ModelFailureDetails {
     fields.put("token_received", tokenReceived);
     fields.put("text_received", textReceived);
     fields.put("failure_kind", kind);
+    fields.put("finish_reason", finishReason);
     fields.put("error_type", error.getClass().getSimpleName());
     fields.put("root_cause_type", next == null ? causes.getLast().getClass().getSimpleName() : null);
     fields.put("cause_types", causes.stream().map(c -> c.getClass().getSimpleName()).toList());

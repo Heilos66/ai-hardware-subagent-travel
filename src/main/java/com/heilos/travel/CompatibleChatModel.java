@@ -125,10 +125,10 @@ final class CompatibleChatModel implements ChatModel {
                     boolean streaming = MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type);
                     Flux<ChatResponse> responses;
                     if (streaming) {
-                      StreamState state = new StreamState();
+                      StreamState state = new StreamState(failure);
                       responses = SseDecoder.decode(reply.bodyToFlux(DataBuffer.class))
                           .takeUntil(event -> event.data().strip().equals("[DONE]"))
-                          .concatMapIterable(state::accept, 1)
+                          .concatMap(state::decode, 1)
                           .concatWith(Flux.defer(state::finish));
                     } else responses = reply
                         .bodyToMono(byte[].class)
@@ -234,6 +234,19 @@ final class CompatibleChatModel implements ChatModel {
 
   private static final class StreamState {
     private boolean completed, hasText;
+    private final ModelFailureDetails failure;
+    private AgentException terminalError;
+
+    StreamState(ModelFailureDetails failure) {
+      this.failure = failure;
+    }
+
+    Flux<ChatResponse> decode(SseDecoder.Event event) {
+      // Deliver text in the terminating frame before signalling an incomplete answer.
+      return Flux.fromIterable(accept(event))
+          .concatWith(Flux.defer(() -> terminalError == null
+              ? Flux.empty() : Flux.error(terminalError)));
+    }
 
     List<ChatResponse> accept(SseDecoder.Event event) {
       if (event.name().equals("error")) throw AgentException.model("模型服务返回流式错误");
@@ -256,12 +269,21 @@ final class CompatibleChatModel implements ChatModel {
         if (!delta.isObject()) throw AgentException.model("模型流式数据缺少delta");
         JsonNode finish = choice.path("finish_reason");
         String reason = finish.isTextual() ? finish.asText() : "";
+        if (!reason.isEmpty()) failure.finishReason(reason);
         if (reason.equals("content_filter")) throw AgentException.model("模型回答被内容过滤");
         String text = optionalText(delta.get("content")),
             reasoning = optionalText(delta.get("reasoning_content"));
         hasText |= !text.isBlank();
         if (!text.isEmpty() || !reasoning.isEmpty()) result.add(response(text, reasoning));
-        if (!reason.isEmpty()) completed = true;
+        if (reason.equals("stop")) completed = true;
+        else if (!reason.isEmpty()) {
+          terminalError = AgentException.model(switch (reason) {
+            case "length" -> "回答因长度限制未完整生成";
+            case "tool_calls", "function_call" -> "模型请求调用工具，当前流程不支持，回答未完成";
+            default -> "模型返回未知结束原因，回答未完成";
+          });
+          break;
+        }
       }
       return result;
     }

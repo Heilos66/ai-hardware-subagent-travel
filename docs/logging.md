@@ -108,6 +108,12 @@ workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80
 
 例如 `http_status=429`、`failure_kind=http_error` 表示上游返回限流状态；`http_status=null`、`failure_kind=connect_timeout` 表示未收到 HTTP 响应，连接建立超时；`http_status=200`、`failure_kind=stream_incomplete`、`text_received=true` 表示已有部分正文但流缺少结束标记。TLS 分类依据异常类型，不能据此单独判断证书、防火墙或代理中的具体原因。
 
+流式结束原因处理：`stop` 且有有效正文正常成功；`length` 返回 E5003（回答因长度限制未完整生成），`tool_calls` / `function_call` 返回 E5003（当前流程不支持工具调用，回答未完成），其他非空字符串返回 E5003（未知结束原因）。`content_filter` 仍按原逻辑失败。仅收到 `[DONE]` 且有有效正文的既有兼容行为保留；null 或缺失结束原因本身不代表完成。
+
+这些失败保留已通过 SSE `message` 发送的正文，长度截断、工具调用或未知结束原因所在片段的正文也会先发送；随后立即输出失败的 `workflow_finished` 和 `end`，不等待后续 `[DONE]`，不自动重试。错误说明位于 `workflow_finished.data.outputs.responseContent` 内的 JSON 字符串（code/message），不会拼入回答流，也不在最终结果重复返回部分正文。前端需保留已接收文字并根据失败终态自行展示“回答未完成”。
+
+`model_failed` 增加 `finish_reason`（未收到时为 null，最多 256 字符，沿用脱敏）；对应 `failure_kind` 为 `length_truncated`、`unsupported_tool_call` 或 `unknown_finish_reason`。`text_received` 表示是否已解析到正文。未知结束原因原值仅供日志排查，不回显到用户错误说明。
+
 只采集以上响应头元数据，每个头最多 256 字符并清理控制字符，沿用现有凭据脱敏与整体日志长度限制。不记录上游错误正文、完整 URL、原始异常消息或堆栈。主动取消不会被记录为 model_failed，仍查看工作流 cancelled 终态。
 
 本地在 `.env`、云端在 AgentArts **运行时环境变量**中设置，重新启动相应服务/实例后生效：

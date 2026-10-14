@@ -190,6 +190,33 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     assertThat(fields.toString()).doesNotContain("private");
   }
 
+  @ParameterizedTest
+  @CsvSource({
+      "length,length_truncated", "tool_calls,unsupported_tool_call",
+      "function_call,unsupported_tool_call", "unexpected-private,unknown_finish_reason"
+  })
+  void incompleteFinishPreservesPartialTextAndFailsImmediately(String reason, String kind) {
+    String last = "data: " + Json.write(Map.of("choices", List.of(Map.of(
+        "index", 0, "delta", Map.of("content", "末段"), "finish_reason", reason)))) + "\n\n";
+    handler = r -> r.uri().startsWith("/api/v1/retrieval") ? success(r)
+        : new Reply(200, "text/event-stream",
+            Flux.concat(Flux.just(delta("首段", ""), last), Flux.never()));
+    var events = run(input());
+    assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
+        .containsExactly("首段", "末段");
+    assertThat(result(events).path("code").asText()).isEqualTo("E5003");
+    assertThat(result(events).path("message").asText())
+        .contains(reason.equals("length") ? "未完整生成" : "未完成");
+    assertThat(events.get(events.size() - 2).path("data").path("status").path("desc").asText())
+        .isEqualTo("failed");
+    assertThat(events.getLast().path("event").asText()).isEqualTo("end");
+    var failure = event("model_failed").data();
+    assertThat(failure.path("finish_reason").asText()).isEqualTo(reason);
+    assertThat(failure.path("failure_kind").asText()).isEqualTo(kind);
+    assertThat(failure.path("text_received").asBoolean()).isTrue();
+    assertThat(events.toString()).doesNotContain("unexpected-private");
+  }
+
   @Test
   void defaultLogsSummarizeResultsAndCorrelateWithoutBodies() {
     var events = run(input());
