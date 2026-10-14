@@ -79,8 +79,7 @@ final class TravelAgent {
             .classify(image)
             .flatMapMany(
                 classification -> {
-                  if (!classification.name().isEmpty()
-                      && classification.confidence() >= settings.classifierThreshold) {
+                  if (classification.status() == ExternalServices.ClassificationStatus.RECOGNIZED) {
                     Inputs.ModelConfig model = inputs.select("text");
                     return Flux.concat(
                         Flux.just(new Stage("search_image", "知识检索_图片", "KnowledgeRepo")),

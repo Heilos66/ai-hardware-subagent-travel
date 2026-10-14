@@ -189,3 +189,11 @@ LTS 按日志流保存日志，一个日志组可包含多个日志流。日志�
 - 使用的日志流是否支持分析。官方区分标准型与搜索型，搜索型不支持 SQL 分析；分析前需核对实际类型。[来源：管理日志流](https://support.huaweicloud.com/usermanual-lts/lts_04_0004.html)
 - 是否已配置 OBS 归档、归档任务是否正常、是否开通一次性转储。
 - 一次真实调用的日志是否完整到达，以及字段提取、统计查询是否符合预期。
+
+### 分类失败与降级
+
+分类结果区分 recognized（名称和置信度有效且达到阈值）、unrecognized（有效结果但低于阈值）、service_failed（服务失败）。前者保持分类名称检索＋文本模型，低置信度正常转视觉。当前接口尚无已确认的“无匹配”业务码，因此非成功业务码、空名称、缺失或非法分类字段不视为未识别。
+
+`CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR` 默认 false。设为 true 后，仅分类调用超时、连接失败、HTTP 5xx 转视觉模型；不重试分类、不调用知识库。401/403、其他 HTTP 4xx、配置错误、TLS/DNS、业务失败和响应格式错误终止流程。降级需要请求中提供 text_vision 模型配置，否则按既有缺少模型配置错误返回。
+
+所有分类故障记录 INFO `workflow_diagnostic event=classifier_failed`，包含 execution_id、status=service_failed、code、failure_kind、受控 reason、fallback_to_vision 和 alert=true。正常低置信度不是故障，不产生该事件。日志不包含上游响应正文、图片或原始异常；alert 字段可用于 LTS 告警规则，本次不创建云端告警。降级后整个工作流可能成功，仍可通过此事件发现被降级掩盖的服务故障。

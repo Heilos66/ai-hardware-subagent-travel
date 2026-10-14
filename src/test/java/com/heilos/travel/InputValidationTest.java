@@ -38,7 +38,8 @@ class InputValidationTest extends AgentTestSupport {
                 200,
                 "data",
                 Map.of("top1_result", Map.of("class_name", "test", "confidence", raw))));
-    assertThat(ExternalServices.parseClassification(json).name()).isEmpty();
+    assertThatThrownBy(() -> ExternalServices.parseClassification(json))
+        .hasMessage("图片分类服务分类字段格式错误");
   }
 
   @ParameterizedTest

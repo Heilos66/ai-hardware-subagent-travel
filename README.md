@@ -71,6 +71,7 @@ java -jar target/travel-agent.jar
 | --- | --- |
 | `CLASSIFIER_URL` | 默认 `http://1.95.152.66:16000/mobilenetv3large` |
 | `CLASSIFIER_API_KEY` | 原始可用密钥，作为 `X-API-Key` 发送；平台 `E1-` 加密值不可直接使用 |
+| `CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR` | 默认 false；true 时分类超时、连接失败、HTTP 5xx 转视觉模型，记录 classifier_failed；鉴权、配置、TLS/DNS、业务或格式错误不降级 |
 | `CLASSIFIER_THRESHOLD` | 默认 0.7 |
 | `RAGFLOW_ENABLED` | 默认 true；测试时设 false，不调用知识库、不读取 Token 文件，返回空检索结果继续模型调用 |
 | `RAGFLOW_URL/DATASET_ID/API_TOKEN` | 完整检索 URL、知识库 ID、Bearer Token；公网 URL 为 `http://1.95.220.19:9380/api/v1/retrieval`，私网及切换方式见 [环境变量说明](docs/environment-variables.md#公网与私网地址切换) |

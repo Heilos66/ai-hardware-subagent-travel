@@ -14,6 +14,7 @@ public final class AgentSettings {
   final String workflowId, workflowName;
   final int maxRequestBytes, maxImageBytes, maxContextChars;
   final double classifierThreshold;
+  final boolean classifierFallbackOnTransientError;
   final Duration classifierTimeout, modelTimeout, heartbeat;
   final Set<String> modelAllowedHosts;
   final RagFlow ragflow;
@@ -73,6 +74,7 @@ public final class AgentSettings {
     maxImageBytes = integer(env, "MAX_IMAGE_BYTES", 10 * 1024 * 1024, Integer.MAX_VALUE);
     maxContextChars = integer(env, "MAX_CONTEXT_CHARS", 16000, Integer.MAX_VALUE);
     classifierThreshold = number(env, "CLASSIFIER_THRESHOLD", .7, 0, 1);
+    classifierFallbackOnTransientError = bool(env, "CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", false);
     classifierTimeout = duration(env, "CLASSIFIER_TIMEOUT", 30, 300);
     modelTimeout = duration(env, "MODEL_TIMEOUT", 60, 600);
     heartbeat = duration(env, "HEARTBEAT_SECONDS", 15, 60);

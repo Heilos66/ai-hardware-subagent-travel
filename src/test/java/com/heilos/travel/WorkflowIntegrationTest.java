@@ -70,7 +70,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     "0.7,text,3",
     "0.69999,text_vision,2",
     "1%,text_vision,2",
-    "NaN,text_vision,2"
+    "0,text_vision,2"
   })
   void imageRoutes(String confidence, String type, int count) {
     handler = r -> r.uri().startsWith("/classifier") ? classification(confidence) : success(r);

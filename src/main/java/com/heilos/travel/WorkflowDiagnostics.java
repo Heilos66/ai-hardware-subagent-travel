@@ -83,6 +83,13 @@ final class WorkflowDiagnostics {
     });
   }
 
+  void classifierFailure(ContextView context, String code, String kind, String reason,
+      boolean fallback) {
+    emit(context, "classifier_failed", () -> Map.of(
+        "status", "service_failed", "code", code, "failure_kind", kind,
+        "reason", reason, "fallback_to_vision", fallback, "alert", true));
+  }
+
   void modelRequest(ContextView context, Inputs.ModelConfig config, Object body) {
     emit(context, "model_request", () -> {
       Map<String, Object> fields = new LinkedHashMap<>();

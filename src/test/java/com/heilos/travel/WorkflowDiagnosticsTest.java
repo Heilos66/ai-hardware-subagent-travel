@@ -217,6 +217,62 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     assertThat(events.toString()).doesNotContain("unexpected-private");
   }
 
+  @ParameterizedTest
+  @CsvSource({
+      "503,true,true", "503,false,false", "timeout,true,true", "timeout,false,false",
+      "connection,true,true", "connection,false,false",
+      "401,true,false", "403,true,false", "400,true,false", "429,true,false",
+      "business,true,false", "missing,true,false", "invalid,true,false", "key,true,false",
+      "nan,true,false", "dns,true,false", "tls,true,false", "url,true,false"
+  })
+  void classifierFailurePolicyIsExplicit(String scenario, boolean enabled, boolean fallback) {
+    handler = r -> {
+      if (!r.uri().equals("/classifier")) return success(r);
+      return switch (scenario) {
+        case "timeout" -> new Reply(200, "application/json", Flux.never());
+        case "business" -> Reply.json(Map.of("code", 500, "message", "private-classifier-error"));
+        case "nan" -> classification("NaN");
+        case "missing" -> Reply.json(Map.of("code", 200, "data", Map.of()));
+        case "invalid" -> new Reply(200, "application/json", Flux.just("private-classifier-error"));
+        default -> new Reply(Integer.parseInt(scenario), "application/json", Flux.just("private-classifier-error"));
+      };
+    };
+    if (List.of("connection", "dns", "tls").contains(scenario)) {
+      http = org.springframework.web.reactive.function.client.WebClient.builder()
+          .exchangeFunction(request -> {
+            if (request.url().getPath().equals("/classifier"))
+              return reactor.core.publisher.Mono.error(
+                  new org.springframework.web.reactive.function.client.WebClientRequestException(
+                      switch (scenario) {
+                        case "dns" -> new java.net.UnknownHostException("private-classifier-error");
+                        case "tls" -> new javax.net.ssl.SSLHandshakeException("private-classifier-error");
+                        default -> new java.net.ConnectException("private-classifier-error");
+                      }, request.method(),
+                      request.url(), request.headers()));
+            return reactor.core.publisher.Mono.just(
+                org.springframework.web.reactive.function.client.ClientResponse
+                    .create(org.springframework.http.HttpStatus.OK)
+                    .header("Content-Type", "text/event-stream")
+                    .body(delta("视觉回答", "") + DONE).build());
+          }).build();
+    }
+    var input = input();
+    input.put("image_url", List.of("https://image.test/a.jpg"));
+    var cfg = settings(Map.of("CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", Boolean.toString(enabled),
+        "CLASSIFIER_TIMEOUT", "0.2", "CLASSIFIER_API_KEY", scenario.equals("key") ? "" : "classifier-secret",
+        "CLASSIFIER_URL", scenario.equals("url") ? "" : base + "/classifier"));
+    var events = run(input, cfg);
+    assertThat(result(events).path("code").asText().equals("0")).isEqualTo(fallback);
+    assertThat(requests).noneMatch(r -> r.uri().contains("retrieval"));
+    if (!fallback) assertThat(requests).noneMatch(r -> r.uri().contains("chat/completions"));
+    var failure = event("classifier_failed");
+    assertThat(failure.executionId()).isEqualTo(executionId(events));
+    assertThat(failure.data().path("status").asText()).isEqualTo("service_failed");
+    assertThat(failure.data().path("fallback_to_vision").asBoolean()).isEqualTo(fallback);
+    assertThat(failure.data().path("alert").asBoolean()).isTrue();
+    assertThat(logs.toString()).doesNotContain("private-classifier-error", "classifier-secret");
+  }
+
   @Test
   void defaultLogsSummarizeResultsAndCorrelateWithoutBodies() {
     var events = run(input());
