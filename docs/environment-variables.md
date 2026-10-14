@@ -1,6 +1,6 @@
 # 环境变量配置说明
 
-按 2026-10-12 当前工程代码整理。下表说明变量的作用、是否必须、未配置时的默认行为，以及配置位置；不包含真实密钥。可复制的完整模板见 [.env.example](../.env.example)。
+按 2026-10-12 工程代码整理，2026-10-14 补充分类故障降级配置。下表说明变量的作用、是否必须、未配置时的默认行为，以及配置位置；不包含真实密钥。可复制的完整模板见 [.env.example](../.env.example)。
 
 ## 配置位置与生效方式
 
@@ -139,8 +139,19 @@ RAGFLOW_RERANK_CANDIDATES_COUNT=null
 | --- | --- | --- | --- |
 | `CLASSIFIER_API_KEY` | 图片请求必填 | 空，分类返回 E5004 | 原始分类器密钥，放入 `X-API-Key` 请求头；纯文本不使用 |
 | `CLASSIFIER_URL` | 选填 | `http://1.95.152.66:16000/mobilenetv3large` | 分类接口完整 URL；当前部署可沿用默认值 |
-| `CLASSIFIER_THRESHOLD` | 选填 | `0.7` | 范围 0～1；分类名称非空且置信度 ≥ 此值走知识检索与文本模型，否则走视觉模型；当前策略保持 0.7 |
+| `CLASSIFIER_THRESHOLD` | 选填 | `0.7` | 范围 0～1；分类结果合法且置信度 ≥ 此值走知识检索与文本模型；合法低置信度结果走视觉模型，非法字段按服务失败处理 |
 | `CLASSIFIER_TIMEOUT` | 选填 | `30` 秒 | 0.000001～300 秒；分类请求总超时 |
+| `CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR` | 选填 | `false` | 接受 true/false；true 时仅分类调用超时、连接失败、HTTP 5xx 转视觉模型；false 时这些故障直接失败。鉴权、配置、TLS/DNS、业务及响应格式错误不降级 |
+
+开启暂时性分类故障降级：
+
+```dotenv
+CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR=true
+```
+
+降级不重试分类、不调用知识库，需要请求中的 `model_config` 提供 `text_vision` 模型配置；缺少时返回模型配置错误。所有分类故障记录 `classifier_failed`，其中 `fallback_to_vision` 表示是否选择降级，`alert=true` 可用于配置告警规则。合法低置信度分流不属于故障，不受此开关影响。详见 [分类失败与降级](logging.md#分类失败与降级)。
+
+首次使用需要部署包含此开关实现的镜像；之后修改变量无需重建镜像，但需重启进程或发布/切换 AgentArts 运行时配置使其生效。
 
 ## 模型调用与输入限制
 
