@@ -73,7 +73,8 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     assertThat(model.uri()).startsWith("/text/");
     assertThat(model.body().path("stream").asBoolean()).isTrue();
     assertThat(model.body().path("messages").get(0).path("content").asText())
-        .contains("中文不超过50字", "不要提及知识库");
+        .contains("不要提及知识库")
+        .doesNotContain("中文不超过50字", "English under 50 words", "日本語は50字以内");
     assertThat(model.body().path("messages").get(1).path("content").asText())
         .contains("兵马俑于1974年发现。", "兵马俑是什么时候发现的");
     assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
