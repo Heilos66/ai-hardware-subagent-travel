@@ -1,0 +1,32 @@
+{
+  "graph-dict": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 297.396708,
+      "import_ms": 14091.4465,
+      "startup_ms": 14389.494,
+      "process_startup_ms": 17192.582374904305
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.146459,
+      "p95_ms": 8.984583,
+      "max_ms": 10.255792
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.212292402982712,
+      "p95_ms": 9.051791857928038,
+      "max_ms": 10.330124758183956
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": []
+  }
+}

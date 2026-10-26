@@ -1,5 +1,6 @@
 """Verify the release container using only local mock services."""
 import http.client
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -8,8 +9,9 @@ import subprocess
 import threading
 import time
 
-IMAGE = 'travel-agent:ame-20261026-01'
-RECEIPT = Path('target/ame-container-verification.json')
+IMAGE = os.environ.get('AME_TEST_IMAGE','travel-agent:ame-v3-validation')
+RECEIPT = Path(os.environ.get('AME_TEST_RECEIPT','target/ame-v3/container-verification.json'))
+RECEIPT.parent.mkdir(parents=True, exist_ok=True)
 seen = []
 
 class Handler(BaseHTTPRequestHandler):
@@ -60,7 +62,7 @@ try:
         container = None
         seen.clear()
         try:
-            env = ['-e', 'MODEL_TIMEOUT=10', '-e', 'AME_ENABLED=' + str(enabled).lower()]
+            env = ['-e', 'MODEL_TIMEOUT=10', '-e', 'AME_ENABLED=' + str(enabled).lower(), '-e', 'AME_RETRIEVAL_MODE=' + os.environ.get('AME_RETRIEVAL_MODE','graph')]
             if enabled:
                 # Omit the switch to verify the default still performs retrieval.
                 env += ['-e', f'RAGFLOW_URL={base}/retrieval',
@@ -81,6 +83,10 @@ try:
                         raise
                     time.sleep(0.2)
             assert docker('exec', container, 'id', '-u') == '10001'
+            if enabled:
+                health = json.loads(docker('exec', container, 'python3', '-c',
+                    'import urllib.request;print(urllib.request.urlopen("http://127.0.0.1:18087/health").read().decode())'))
+                assert health['backend'] == 'ame-' + os.environ.get('AME_RETRIEVAL_MODE','graph') + '-local'
             raw = invoke(port, '/invocations', {'inputs': {
                 'operation': 'chat_completions', 'query': '长信宫灯收藏在哪个博物馆？', 'model_config': [{
                     'type': 'text', 'provider': 'openai-compatible',
@@ -109,7 +115,7 @@ try:
                     raise AssertionError('Missing total log')
                 time.sleep(0.05)
             mode = 'ragflow' if enabled else 'disabled'
-            Path(f'target/ame-container-{mode}.log').write_text(logs)
+            (RECEIPT.parent / f'container-{mode}.log').write_text(logs)
             rows = [(eid, event, json.loads(data)) for eid, event, data in re.findall(
                 r'workflow_diagnostic execution_id=(\S+) event=(\S+) truncated=false data=(.*)', logs)]
             startup = next(data for _, event, data in rows if event == 'ragflow_config')

@@ -1,0 +1,1 @@
+{"url": "http://127.0.0.1:18089/api/v1/retrieval", "startup": {"ready": true, "mode": "graph-cheap", "chunks": 52, "dictionary_words": 678211, "dictionary_ms": 286.289083, "import_ms": 14197.1817, "startup_ms": 14484.32, "process_startup_ms": 14487.595959100872}}

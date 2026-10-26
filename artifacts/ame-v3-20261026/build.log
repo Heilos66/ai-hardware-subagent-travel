@@ -1,0 +1,99 @@
+-- The CXX compiler identification is AppleClang 21.0.0.21000101
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (0.5s)
+-- Generating done (0.1s)
+-- Build files have been written to: /Users/heilos/Developer/company/workflow/target/ame-v3/build
+[ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/json.cpp.o
+[ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/types.cpp.o
+[ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/uid.cpp.o
+[ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/log.cpp.o
+[ 16%] Linking CXX static library libame_core.a
+[ 16%] Built target ame_core
+[ 19%] Building CXX object upstream/storage/CMakeFiles/ame_storage.dir/src/storage.cpp.o
+[ 22%] Linking CXX static library libame_storage.a
+[ 22%] Built target ame_storage
+[ 32%] Building CXX object upstream/vector/CMakeFiles/ame_vector.dir/src/vector_service.cpp.o
+[ 32%] Building CXX object upstream/keyword/CMakeFiles/ame_keyword.dir/src/keyword_manager.cpp.o
+[ 32%] Building CXX object upstream/time/CMakeFiles/ame_time.dir/src/time_service.cpp.o
+[ 35%] Linking CXX static library libame_time.a
+[ 38%] Linking CXX static library libame_vector.a
+[ 38%] Built target ame_time
+[ 45%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/ac_automaton.cpp.o
+[ 45%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/extractor.cpp.o
+[ 45%] Built target ame_vector
+[ 48%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/dat_trie.cpp.o
+[ 51%] Linking CXX static library libame_keyword.a
+[ 51%] Built target ame_keyword
+[ 54%] Building CXX object upstream/entity/CMakeFiles/ame_entity.dir/src/entity_resolver.cpp.o
+[ 58%] Linking CXX static library libame_extractor.a
+[ 58%] Built target ame_extractor
+[ 67%] Building CXX object upstream/seed/CMakeFiles/ame_seed.dir/src/seed_generator.cpp.o
+[ 67%] Building CXX object upstream/diffusion/CMakeFiles/ame_diffusion.dir/src/diffusion_engine.cpp.o
+[ 67%] Building CXX object upstream/graph_writer/CMakeFiles/ame_graph_writer.dir/src/graph_writer.cpp.o
+[ 70%] Linking CXX static library libame_entity.a
+[ 70%] Built target ame_entity
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:63:31: warning: '&&' within '||' [-Wlogical-op-parentheses]
+   62 |   bool es_pl = (last == 's' || last == 'x' || last == 'z' ||
+      |                                                           ~~
+   63 |                 w.size() >= 2 && (w.compare(w.size() - 2, 2, "ch") == 0 ||
+      |                 ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   64 |                                   w.compare(w.size() - 2, 2, "sh") == 0));
+      |                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:63:31: note: place parentheses around the '&&' expression to silence this warning
+   63 |                 w.size() >= 2 && (w.compare(w.size() - 2, 2, "ch") == 0 ||
+      |                               ^
+      |                 (
+   64 |                                   w.compare(w.size() - 2, 2, "sh") == 0));
+      |
+      |                                                                         )
+In file included from /Users/heilos/Developer/company/workflow/target/ame-v3/source/diffusion/src/diffusion_engine.cpp:20:
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/diffusion/include/ame/diffusion/diffusion_engine.h:85:19: warning: private field 'kw_' is not used [-Wunused-private-field]
+   85 |   KeywordManager* kw_;  // 休眠关键词判定（可空，空则查节点 status）
+      |                   ^
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:49:13: warning: unused function 'mint_inflections' [-Wunused-function]
+   49 | static void mint_inflections(const std::string& w,
+      |             ^~~~~~~~~~~~~~~~
+[ 74%] Linking CXX static library libame_graph_writer.a
+[ 74%] Built target ame_graph_writer
+1 warning generated.
+[ 77%] Linking CXX static library libame_diffusion.a
+[ 77%] Built target ame_diffusion
+[ 80%] Building CXX object upstream/rerank/CMakeFiles/ame_rerank.dir/src/reranker.cpp.o
+2 warnings generated.
+[ 83%] Linking CXX static library libame_seed.a
+[ 83%] Built target ame_seed
+In file included from /Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/src/reranker.cpp:28:
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/include/ame/rerank/reranker.h:76:16: warning: private field 'ts_' is not used [-Wunused-private-field]
+   76 |   TimeService& ts_;
+      |                ^
+/Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/include/ame/rerank/reranker.h:77:18: warning: private field 'vec_' is not used [-Wunused-private-field]
+   77 |   VectorService& vec_;
+      |                  ^
+2 warnings generated.
+[ 87%] Linking CXX static library libame_rerank.a
+[ 87%] Built target ame_rerank
+[ 90%] Building CXX object upstream/engine/CMakeFiles/ame_engine.dir/src/engine.cpp.o
+[ 93%] Linking CXX static library libame_engine.a
+[ 93%] Built target ame_engine
+[ 96%] Building CXX object CMakeFiles/ame_kb_worker.dir/worker.cpp.o
+[100%] Linking CXX executable ame_kb_worker
+[100%] Built target ame_kb_worker
+[ 16%] Built target ame_core
+[ 22%] Built target ame_storage
+[ 35%] Built target ame_vector
+[ 41%] Built target ame_keyword
+[ 41%] Built target ame_time
+[ 54%] Built target ame_diffusion
+[ 54%] Built target ame_entity
+[ 67%] Built target ame_extractor
+[ 74%] Built target ame_rerank
+[ 87%] Built target ame_graph_writer
+[ 87%] Built target ame_seed
+[ 93%] Built target ame_engine
+[ 96%] Building CXX object upstream/tests/CMakeFiles/test_engine.dir/test_engine.cpp.o
+[100%] Linking CXX executable test_engine
+[100%] Built target test_engine

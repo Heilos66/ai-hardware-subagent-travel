@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Offline same-corpus AME test. No remote model calls; no answer cache."""
-import argparse,hashlib,json,math,platform,random,subprocess,time
+import argparse,os,hashlib,json,math,platform,random,subprocess,time
 from pathlib import Path
 
 def percentile(values,p):return sorted(values)[math.ceil(len(values)*p)-1] if values else None
@@ -30,6 +30,7 @@ def main():
     ap.add_argument('--source',type=Path,required=True)
     ap.add_argument('--binary',type=Path,required=True)
     ap.add_argument('--out',type=Path,required=True)
+    ap.add_argument('--modes',nargs='+',choices=['graph-dict','graph-no-dict','graph-cheap','lmem'])
     ap.add_argument('--rounds',type=int,default=50)
     a=ap.parse_args()
     if a.rounds<1:ap.error('rounds must be positive')
@@ -42,8 +43,16 @@ def main():
       'input_sha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in [corpus,fixture/'queries.json']},
       'dictionary_sha256':hashlib.sha256((a.source/'lexicon/lexicon_src/segmentation/merged.txt').read_bytes()).hexdigest()}
     (a.out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
+    os.environ['AME_CHEAP_MODEL']=str((a.source/'android/app/src/main/assets/cheap_model.json').resolve())
+    modes=a.modes or (['graph-dict','graph-no-dict','lmem'] if (a.source/'mem').exists() else ['graph-dict','graph-cheap'])
+    manifest['modes']=modes
+    model=a.source/'android/app/src/main/assets/cheap_model.json'
+    manifest['cheap_model_sha256']=hashlib.sha256(model.read_bytes()).hexdigest() if model.exists() else None
+    (a.out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
     summaries={}
-    for name,mode,dict_path in [('graph-dict','graph',a.source/'lexicon/lexicon_src/segmentation/merged.txt'),('graph-no-dict','graph',Path('-')),('lmem','lmem',Path('-'))]:
+    for name in modes:
+        mode='graph-cheap' if name=='graph-cheap' else ('lmem' if name=='lmem' else 'graph')
+        dict_path=a.source/'lexicon/lexicon_src/segmentation/merged.txt' if name in ['graph-dict','graph-cheap'] else Path('-')
         with (a.out/(name+'-stderr.log')).open('w') as log:
             worker=Worker(a.binary.resolve(),corpus,dict_path,mode,a.out/(name+'-dict.cache'),log)
             rows=[];warm=[]

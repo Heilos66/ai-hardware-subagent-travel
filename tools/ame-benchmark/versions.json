@@ -1,0 +1,10 @@
+{
+  "2.0": {
+    "branch": "dev-2.0",
+    "revision": "26ce43e2b34be958b84edb4dcf834291ffa820b6"
+  },
+  "3.0": {
+    "branch": "dev-3.0",
+    "revision": "df68cbf1f2742095901ec97434507d76cba2f61d"
+  }
+}

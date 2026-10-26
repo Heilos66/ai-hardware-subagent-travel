@@ -1,0 +1,2 @@
+PASS disabled: health, UID 10001, expected retrieval calls, SSE, prompt, diagnostics and TTFT
+PASS ragflow: health, UID 10001, expected retrieval calls, SSE, prompt, diagnostics and TTFT

@@ -1,0 +1,65 @@
+{
+  "graph-dict": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 284.410791,
+      "import_ms": 13959.3963,
+      "startup_ms": 14245.6016,
+      "process_startup_ms": 14248.727917205542
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.084541,
+      "p95_ms": 8.949042,
+      "max_ms": 9.998417
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.138541899621487,
+      "p95_ms": 9.006790816783905,
+      "max_ms": 10.09695790708065
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": []
+  },
+  "graph-cheap": {
+    "startup": {
+      "ready": true,
+      "mode": "graph-cheap",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 288.03025,
+      "import_ms": 13761.6853,
+      "startup_ms": 14050.2225,
+      "process_startup_ms": 14054.104959126562
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.242541,
+      "p95_ms": 9.073375,
+      "max_ms": 10.29125
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.310334127396345,
+      "p95_ms": 9.145541116595268,
+      "max_ms": 10.36412501707673
+    },
+    "unique_questions": 20,
+    "top1_correct": 18,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [
+      10,
+      12
+    ],
+    "hit5_misses": []
+  }
+}

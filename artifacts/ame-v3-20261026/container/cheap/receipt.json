@@ -1,0 +1,7 @@
+{
+  "container_smoke_verified": true,
+  "retrieval_switch_verified": true,
+  "container_user": "10001",
+  "local_image_id": "sha256:b7e5841c080c8eff427baa1bbf5092e614e70c814495c0e1fa41d3aebf89cc75",
+  "response_length_prompt_verified": true
+}

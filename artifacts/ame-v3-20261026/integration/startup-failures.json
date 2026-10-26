@@ -1,0 +1,12 @@
+[
+  {
+    "mode": "lmem",
+    "exit_code": 1,
+    "stderr": "lmem is not supported by this upstream version"
+  },
+  {
+    "mode": "graph-cheap",
+    "exit_code": 1,
+    "stderr": "cheap model unreadable"
+  }
+]

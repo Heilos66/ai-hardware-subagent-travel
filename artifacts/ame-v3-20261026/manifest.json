@@ -1,0 +1,30 @@
+{
+  "upstream_versions": {
+    "2.0": {
+      "branch": "dev-2.0",
+      "revision": "26ce43e2b34be958b84edb4dcf834291ffa820b6"
+    },
+    "3.0": {
+      "branch": "dev-3.0",
+      "revision": "df68cbf1f2742095901ec97434507d76cba2f61d"
+    }
+  },
+  "default_mode": "graph",
+  "optional_mode": "graph-cheap",
+  "source_changes": false,
+  "corpus_chunks": 52,
+  "unique_questions": 20,
+  "rounds": 50,
+  "concurrency": 1,
+  "scope": "Mac ARM64 warm-process recall, no CSS or remote models; v2 baseline followed by v3 graph and cheap sequentially; not randomized A/B",
+  "local_image": "travel-agent:ame-v3-validation",
+  "local_image_digest": "sha256:b7e5841c080c8eff427baa1bbf5092e614e70c814495c0e1fa41d3aebf89cc75",
+  "swr_pushed": false,
+  "agentarts_deployed": false,
+  "raw_source": "target/ame-v3",
+  "excluded_runs": "initial benchmark overlapped baseline compilation during startup; final comparison uses baseline/ and final/ only",
+  "binary_sha256": {
+    "v2": "15e21156b4cb35b264fe784a5450fb93cbd9266ac91ee2248188de918295318a",
+    "v3": "7519ec7d42ab686f1bec0fdf825d3d291e12fcdeec5339263af613e1fa27208a"
+  }
+}

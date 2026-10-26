@@ -1,0 +1,530 @@
+{
+  "2.0 graph": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 297.396708,
+      "import_ms": 14091.4465,
+      "startup_ms": 14389.494,
+      "process_startup_ms": 17192.582374904305
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.146459,
+      "p95_ms": 8.984583,
+      "max_ms": 10.255792
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.212292402982712,
+      "p95_ms": 9.051791857928038,
+      "max_ms": 10.330124758183956
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": [],
+    "target_document_chunks": 91,
+    "returned_chunks": 100,
+    "top5_ids": {
+      "16": [
+        "8166462311a1e55f",
+        "ab728b52de3503b2",
+        "8241fc4f0afb21dc",
+        "6f22f3f54fb46554",
+        "34ff5a95a76f602d"
+      ],
+      "19": [
+        "34ff5a95a76f602d",
+        "8241fc4f0afb21dc",
+        "ab728b52de3503b2",
+        "6f22f3f54fb46554",
+        "095256fb178459ff"
+      ],
+      "11": [
+        "aa62633ca4a4b768",
+        "344bfaf326525b49",
+        "dbe7243c977b3fa3",
+        "7aa617123a7b622b",
+        "cdcddf04ad0b1727"
+      ],
+      "2": [
+        "095256fb178459ff",
+        "6eccaee237b5c978",
+        "076121fe7c7dd104",
+        "b3033bb2231868a4",
+        "9834ad85a13de43a"
+      ],
+      "17": [
+        "ab728b52de3503b2",
+        "8cb0e7df8dcf8a7a",
+        "8241fc4f0afb21dc",
+        "8166462311a1e55f",
+        "9e0ad986d15531a3"
+      ],
+      "18": [
+        "6f22f3f54fb46554",
+        "8241fc4f0afb21dc",
+        "34ff5a95a76f602d",
+        "8cc219faace4fa32",
+        "8cb0e7df8dcf8a7a"
+      ],
+      "13": [
+        "dbe7243c977b3fa3",
+        "344bfaf326525b49",
+        "aa62633ca4a4b768",
+        "7aa617123a7b622b",
+        "9a7a93ee108f54cd"
+      ],
+      "14": [
+        "b15424546349f80b",
+        "7aa617123a7b622b",
+        "8228fa3cbf18af3a",
+        "9a7a93ee108f54cd",
+        "cdcddf04ad0b1727"
+      ],
+      "10": [
+        "b15424546349f80b",
+        "7aa617123a7b622b",
+        "8228fa3cbf18af3a",
+        "344bfaf326525b49",
+        "aa62633ca4a4b768"
+      ],
+      "5": [
+        "d0576dcdffb36283",
+        "58c01d50096315bb",
+        "fed568b2e0ab2fca",
+        "1610956192445521",
+        "cdcddf04ad0b1727"
+      ],
+      "9": [
+        "bac32ffbb5971827",
+        "3fce8f7bc5ee77c2",
+        "d0576dcdffb36283",
+        "b0eabf08a6ef547c",
+        "58c01d50096315bb"
+      ],
+      "6": [
+        "02ebda364e21f4fd",
+        "fed568b2e0ab2fca",
+        "bac32ffbb5971827",
+        "3fce8f7bc5ee77c2",
+        "344bfaf326525b49"
+      ],
+      "0": [
+        "095256fb178459ff",
+        "6eccaee237b5c978",
+        "076121fe7c7dd104",
+        "fc23f2a1bd303762",
+        "612c17dea0018dda"
+      ],
+      "1": [
+        "6eccaee237b5c978",
+        "ef1489278c6e957e",
+        "076121fe7c7dd104",
+        "fc23f2a1bd303762",
+        "b3033bb2231868a4"
+      ],
+      "8": [
+        "d0576dcdffb36283",
+        "02ebda364e21f4fd",
+        "3fce8f7bc5ee77c2",
+        "58c01d50096315bb",
+        "1610956192445521"
+      ],
+      "12": [
+        "aa62633ca4a4b768",
+        "b15424546349f80b",
+        "344bfaf326525b49",
+        "8228fa3cbf18af3a",
+        "ab728b52de3503b2"
+      ],
+      "15": [
+        "8241fc4f0afb21dc",
+        "34ff5a95a76f602d",
+        "d0576dcdffb36283",
+        "0ba044e4b880fa30",
+        "ab728b52de3503b2"
+      ],
+      "4": [
+        "ef1489278c6e957e",
+        "6eccaee237b5c978",
+        "b3033bb2231868a4",
+        "fc23f2a1bd303762",
+        "076121fe7c7dd104"
+      ],
+      "7": [
+        "58c01d50096315bb",
+        "bac32ffbb5971827",
+        "4e7e5245f88a2f9e",
+        "02ebda364e21f4fd",
+        "aa55937c7a376891"
+      ],
+      "3": [
+        "dc5fa740e27058ae",
+        "ef1489278c6e957e",
+        "6eccaee237b5c978",
+        "9834ad85a13de43a",
+        "076121fe7c7dd104"
+      ]
+    },
+    "identical_top5_to_v2_questions": 20
+  },
+  "3.0 graph": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 284.410791,
+      "import_ms": 13959.3963,
+      "startup_ms": 14245.6016,
+      "process_startup_ms": 14248.727917205542
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.084541,
+      "p95_ms": 8.949042,
+      "max_ms": 9.998417
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.138541899621487,
+      "p95_ms": 9.006790816783905,
+      "max_ms": 10.09695790708065
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": [],
+    "target_document_chunks": 91,
+    "returned_chunks": 100,
+    "top5_ids": {
+      "16": [
+        "8166462311a1e55f",
+        "ab728b52de3503b2",
+        "8241fc4f0afb21dc",
+        "6f22f3f54fb46554",
+        "34ff5a95a76f602d"
+      ],
+      "19": [
+        "34ff5a95a76f602d",
+        "8241fc4f0afb21dc",
+        "ab728b52de3503b2",
+        "6f22f3f54fb46554",
+        "095256fb178459ff"
+      ],
+      "11": [
+        "aa62633ca4a4b768",
+        "344bfaf326525b49",
+        "dbe7243c977b3fa3",
+        "7aa617123a7b622b",
+        "cdcddf04ad0b1727"
+      ],
+      "2": [
+        "095256fb178459ff",
+        "6eccaee237b5c978",
+        "076121fe7c7dd104",
+        "b3033bb2231868a4",
+        "9834ad85a13de43a"
+      ],
+      "17": [
+        "ab728b52de3503b2",
+        "8cb0e7df8dcf8a7a",
+        "8241fc4f0afb21dc",
+        "8166462311a1e55f",
+        "9e0ad986d15531a3"
+      ],
+      "18": [
+        "6f22f3f54fb46554",
+        "8241fc4f0afb21dc",
+        "34ff5a95a76f602d",
+        "8cc219faace4fa32",
+        "8cb0e7df8dcf8a7a"
+      ],
+      "13": [
+        "dbe7243c977b3fa3",
+        "344bfaf326525b49",
+        "aa62633ca4a4b768",
+        "7aa617123a7b622b",
+        "9a7a93ee108f54cd"
+      ],
+      "14": [
+        "b15424546349f80b",
+        "7aa617123a7b622b",
+        "8228fa3cbf18af3a",
+        "9a7a93ee108f54cd",
+        "cdcddf04ad0b1727"
+      ],
+      "10": [
+        "b15424546349f80b",
+        "7aa617123a7b622b",
+        "8228fa3cbf18af3a",
+        "344bfaf326525b49",
+        "aa62633ca4a4b768"
+      ],
+      "5": [
+        "d0576dcdffb36283",
+        "58c01d50096315bb",
+        "fed568b2e0ab2fca",
+        "1610956192445521",
+        "cdcddf04ad0b1727"
+      ],
+      "9": [
+        "bac32ffbb5971827",
+        "3fce8f7bc5ee77c2",
+        "d0576dcdffb36283",
+        "b0eabf08a6ef547c",
+        "58c01d50096315bb"
+      ],
+      "6": [
+        "02ebda364e21f4fd",
+        "fed568b2e0ab2fca",
+        "bac32ffbb5971827",
+        "3fce8f7bc5ee77c2",
+        "344bfaf326525b49"
+      ],
+      "0": [
+        "095256fb178459ff",
+        "6eccaee237b5c978",
+        "076121fe7c7dd104",
+        "fc23f2a1bd303762",
+        "612c17dea0018dda"
+      ],
+      "1": [
+        "6eccaee237b5c978",
+        "ef1489278c6e957e",
+        "076121fe7c7dd104",
+        "fc23f2a1bd303762",
+        "b3033bb2231868a4"
+      ],
+      "8": [
+        "d0576dcdffb36283",
+        "02ebda364e21f4fd",
+        "3fce8f7bc5ee77c2",
+        "58c01d50096315bb",
+        "1610956192445521"
+      ],
+      "12": [
+        "aa62633ca4a4b768",
+        "b15424546349f80b",
+        "344bfaf326525b49",
+        "8228fa3cbf18af3a",
+        "ab728b52de3503b2"
+      ],
+      "15": [
+        "8241fc4f0afb21dc",
+        "34ff5a95a76f602d",
+        "d0576dcdffb36283",
+        "0ba044e4b880fa30",
+        "ab728b52de3503b2"
+      ],
+      "4": [
+        "ef1489278c6e957e",
+        "6eccaee237b5c978",
+        "b3033bb2231868a4",
+        "fc23f2a1bd303762",
+        "076121fe7c7dd104"
+      ],
+      "7": [
+        "58c01d50096315bb",
+        "bac32ffbb5971827",
+        "4e7e5245f88a2f9e",
+        "02ebda364e21f4fd",
+        "aa55937c7a376891"
+      ],
+      "3": [
+        "dc5fa740e27058ae",
+        "ef1489278c6e957e",
+        "6eccaee237b5c978",
+        "9834ad85a13de43a",
+        "076121fe7c7dd104"
+      ]
+    },
+    "identical_top5_to_v2_questions": 20
+  },
+  "3.0 cheap": {
+    "startup": {
+      "ready": true,
+      "mode": "graph-cheap",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 288.03025,
+      "import_ms": 13761.6853,
+      "startup_ms": 14050.2225,
+      "process_startup_ms": 14054.104959126562
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.242541,
+      "p95_ms": 9.073375,
+      "max_ms": 10.29125
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.310334127396345,
+      "p95_ms": 9.145541116595268,
+      "max_ms": 10.36412501707673
+    },
+    "unique_questions": 20,
+    "top1_correct": 18,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [
+      10,
+      12
+    ],
+    "hit5_misses": [],
+    "target_document_chunks": 80,
+    "returned_chunks": 100,
+    "top5_ids": {
+      "16": [
+        "8166462311a1e55f",
+        "0ba044e4b880fa30",
+        "9e0ad986d15531a3",
+        "8cc219faace4fa32",
+        "6f22f3f54fb46554"
+      ],
+      "19": [
+        "8cc219faace4fa32",
+        "8166462311a1e55f",
+        "9e0ad986d15531a3",
+        "aa55937c7a376891",
+        "0ba044e4b880fa30"
+      ],
+      "11": [
+        "dbe7243c977b3fa3",
+        "cdcddf04ad0b1727",
+        "b15424546349f80b",
+        "3fce8f7bc5ee77c2",
+        "58c01d50096315bb"
+      ],
+      "2": [
+        "9834ad85a13de43a",
+        "10e194e246eb1355",
+        "095256fb178459ff",
+        "8166462311a1e55f",
+        "b3033bb2231868a4"
+      ],
+      "17": [
+        "8cb0e7df8dcf8a7a",
+        "58c01d50096315bb",
+        "b3033bb2231868a4",
+        "9e0ad986d15531a3",
+        "02ebda364e21f4fd"
+      ],
+      "18": [
+        "8cc219faace4fa32",
+        "0ba044e4b880fa30",
+        "02ebda364e21f4fd",
+        "6f22f3f54fb46554",
+        "8cb0e7df8dcf8a7a"
+      ],
+      "13": [
+        "b15424546349f80b",
+        "cdcddf04ad0b1727",
+        "aa62633ca4a4b768",
+        "344bfaf326525b49",
+        "dbe7243c977b3fa3"
+      ],
+      "14": [
+        "cdcddf04ad0b1727",
+        "344bfaf326525b49",
+        "9a7a93ee108f54cd",
+        "8241fc4f0afb21dc",
+        "dbe7243c977b3fa3"
+      ],
+      "10": [
+        "58c01d50096315bb",
+        "dc5fa740e27058ae",
+        "cdcddf04ad0b1727",
+        "344bfaf326525b49",
+        "aa62633ca4a4b768"
+      ],
+      "5": [
+        "bac32ffbb5971827",
+        "d31f8ee775748993",
+        "d0576dcdffb36283",
+        "58c01d50096315bb",
+        "67e823b039ec35fe"
+      ],
+      "9": [
+        "3fce8f7bc5ee77c2",
+        "b0eabf08a6ef547c",
+        "d0576dcdffb36283",
+        "bac32ffbb5971827",
+        "088e77e5df251eff"
+      ],
+      "6": [
+        "3fce8f7bc5ee77c2",
+        "02ebda364e21f4fd",
+        "58c01d50096315bb",
+        "bac32ffbb5971827",
+        "344bfaf326525b49"
+      ],
+      "0": [
+        "612c17dea0018dda",
+        "9834ad85a13de43a",
+        "10e194e246eb1355",
+        "dbe7243c977b3fa3",
+        "b3033bb2231868a4"
+      ],
+      "1": [
+        "fc23f2a1bd303762",
+        "dc5fa740e27058ae",
+        "ef1489278c6e957e",
+        "076121fe7c7dd104",
+        "b3033bb2231868a4"
+      ],
+      "8": [
+        "02ebda364e21f4fd",
+        "58c01d50096315bb",
+        "d31f8ee775748993",
+        "10e194e246eb1355",
+        "5b623f0f64965fe8"
+      ],
+      "12": [
+        "ab728b52de3503b2",
+        "5b623f0f64965fe8",
+        "dbe7243c977b3fa3",
+        "9a7a93ee108f54cd",
+        "b15424546349f80b"
+      ],
+      "15": [
+        "0ba044e4b880fa30",
+        "8cb0e7df8dcf8a7a",
+        "8cc219faace4fa32",
+        "9e0ad986d15531a3",
+        "8166462311a1e55f"
+      ],
+      "4": [
+        "9834ad85a13de43a",
+        "10e194e246eb1355",
+        "dc5fa740e27058ae",
+        "612c17dea0018dda",
+        "fc23f2a1bd303762"
+      ],
+      "7": [
+        "02ebda364e21f4fd",
+        "d0576dcdffb36283",
+        "58c01d50096315bb",
+        "dc5fa740e27058ae",
+        "1610956192445521"
+      ],
+      "3": [
+        "b3033bb2231868a4",
+        "9834ad85a13de43a",
+        "fc23f2a1bd303762",
+        "10e194e246eb1355",
+        "076121fe7c7dd104"
+      ]
+    },
+    "identical_top5_to_v2_questions": 0
+  }
+}

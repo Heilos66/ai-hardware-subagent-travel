@@ -1,0 +1,27 @@
+{
+  "ame_revision": "df68cbf1f2742095901ec97434507d76cba2f61d",
+  "platform": "macOS-26.4-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "processor": "arm",
+  "rounds": 50,
+  "queries_per_round": 20,
+  "concurrency": 1,
+  "remote_models": false,
+  "css_online": false,
+  "graph_settings": {
+    "lex_topk": 30,
+    "soft_min_sim": 0.2,
+    "depth": 2,
+    "limit": 5
+  },
+  "input_sha256": {
+    "corpus.json": "ee35a0667e589f89cfbf8e423939adc28581ef8934dc59eef99db658daa9ec21",
+    "queries.json": "eee772ee8dc93e8034af4e6a38868fd6c385be5150a9950aef9833fb0fdbad4b"
+  },
+  "dictionary_sha256": "bd7794ad88d8207beffb095ca60368601b992bd5b5081efdd5059f6e99969749",
+  "modes": [
+    "graph-dict",
+    "graph-cheap"
+  ],
+  "cheap_model_sha256": "03f65bf82a3228af6bcf67ef6622d2b477c11d94afa6a34e143a3ee1fef26a9e"
+}
