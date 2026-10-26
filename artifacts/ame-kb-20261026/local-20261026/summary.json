@@ -1,0 +1,98 @@
+{
+  "graph-dict": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 678211,
+      "dictionary_ms": 341.145291,
+      "import_ms": 13968.2224,
+      "startup_ms": 14310.6469,
+      "process_startup_ms": 14712.773458100855
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 7.0855,
+      "p95_ms": 8.967333,
+      "max_ms": 9.879042
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 7.13516678661108,
+      "p95_ms": 9.039291646331549,
+      "max_ms": 9.940083138644695
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": []
+  },
+  "graph-no-dict": {
+    "startup": {
+      "ready": true,
+      "mode": "graph",
+      "chunks": 52,
+      "dictionary_words": 0,
+      "dictionary_ms": 0,
+      "import_ms": 4.601625,
+      "startup_ms": 4.943917,
+      "process_startup_ms": 8.154749870300293
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 0.664,
+      "p95_ms": 0.855875,
+      "max_ms": 1.029959
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 0.7087918929755688,
+      "p95_ms": 0.903707928955555,
+      "max_ms": 1.0927501134574413
+    },
+    "unique_questions": 20,
+    "top1_correct": 20,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [],
+    "hit5_misses": []
+  },
+  "lmem": {
+    "startup": {
+      "ready": true,
+      "mode": "lmem",
+      "chunks": 52,
+      "dictionary_words": 0,
+      "dictionary_ms": 0,
+      "import_ms": 133.54,
+      "startup_ms": 133.888208,
+      "process_startup_ms": 136.68004190549254
+    },
+    "recall": {
+      "n": 1000,
+      "p50_ms": 126.720667,
+      "p95_ms": 146.221833,
+      "max_ms": 211.332125
+    },
+    "worker_roundtrip": {
+      "n": 1000,
+      "p50_ms": 126.83508405461907,
+      "p95_ms": 146.31887478753924,
+      "max_ms": 211.53741562739015
+    },
+    "unique_questions": 20,
+    "top1_correct": 15,
+    "hit5": 20,
+    "nonempty": 20,
+    "top1_misses": [
+      17,
+      18,
+      13,
+      10,
+      15
+    ],
+    "hit5_misses": []
+  }
+}

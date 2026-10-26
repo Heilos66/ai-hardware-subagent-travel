@@ -1,0 +1,54 @@
+The push refers to repository [swr.cn-southwest-2.myhuaweicloud.com/asr-test2/travel-agent]
+70542b197b14: Waiting
+84e3cbf87c35: Waiting
+9b2c5d85e699: Waiting
+d5aec63251bb: Waiting
+70542b197b14: Waiting
+84e3cbf87c35: Waiting
+9b2c5d85e699: Waiting
+d5aec63251bb: Waiting
+d5aec63251bb: Waiting
+70542b197b14: Waiting
+84e3cbf87c35: Waiting
+9b2c5d85e699: Waiting
+70542b197b14: Waiting
+84e3cbf87c35: Waiting
+9b2c5d85e699: Waiting
+d5aec63251bb: Waiting
+70542b197b14: Layer already exists
+84e3cbf87c35: Waiting
+9b2c5d85e699: Waiting
+d5aec63251bb: Waiting
+5b345474eca7: Waiting
+92d88a97e4f7: Waiting
+84e3cbf87c35: Layer already exists
+9b2c5d85e699: Layer already exists
+d5aec63251bb: Layer already exists
+5b345474eca7: Layer already exists
+fb6da3936417: Waiting
+623b8f94995b: Waiting
+b170caf1baa3: Waiting
+fb6da3936417: Waiting
+7efc06c63618: Waiting
+7efc06c63618: Waiting
+7efc06c63618: Waiting
+7efc06c63618: Waiting
+7efc06c63618: Waiting
+113999155942: Waiting
+fb6da3936417: Pushed
+113999155942: Waiting
+113999155942: Waiting
+113999155942: Waiting
+b170caf1baa3: Pushed
+df5584d60f76: Waiting
+df5584d60f76: Waiting
+113999155942: Pushed
+99ba73cc5f50: Waiting
+99ba73cc5f50: Waiting
+df5584d60f76: Pushed
+99ba73cc5f50: Waiting
+99ba73cc5f50: Pushed
+92d88a97e4f7: Pushed
+7efc06c63618: Pushed
+623b8f94995b: Pushed
+ame-20261026-01: digest: sha256:073f92e0719409db4b18313f1fc74f00fb27c5bd1a0a5d22ecf8a675ecc59222 size: 2863

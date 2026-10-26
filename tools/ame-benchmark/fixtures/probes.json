@@ -1,0 +1,16 @@
+[
+ {"id":"p01","question":"跪着的宫女托起的那盏汉代灯，现藏哪家博物馆？","expected_document":"长信宫灯.md"},
+ {"id":"p02","question":"宫女形铜灯的袖子为什么连着灯盘上方？","expected_document":"长信宫灯.md"},
+ {"id":"p03","question":"那盏出土于窦绾墓的金色灯，是整块黄金做的吗？","expected_document":"长信宫灯.md"},
+ {"id":"p04","question":"秦陵地下的陶制军队是哪一年被发现的？","expected_document":"秦始皇兵马俑.md"},
+ {"id":"p05","question":"秦陵的陶人士兵刚做出来时就都是灰色的吗？","expected_document":"秦始皇兵马俑.md"},
+ {"id":"p06","question":"秦陵那些陶塑士兵，每张脸都对应一个真实士兵吗？","expected_document":"秦始皇兵马俑.md"},
+ {"id":"p07","question":"驼背上有人跳舞和演奏的唐代彩釉陶俑，表现了什么文化交流？","expected_document":"唐三彩载乐骆驼俑.md"},
+ {"id":"p08","question":"驼背乐舞那件唐代陶塑，是瓷器还是陶器？","expected_document":"唐三彩载乐骆驼俑.md"},
+ {"id":"p09","question":"唐代那件驼背上的小舞台，一共有几个人？","expected_document":"唐三彩载乐骆驼俑.md"},
+ {"id":"p10","question":"三星堆三号坑里器号K3QW：894的脸形文物，是什么材质？","expected_document":"商青铜人面具.md"},
+ {"id":"p11","question":"K3QW：894耳垂的孔一定是为了让人戴在脸上吗？","expected_document":"商青铜人面具.md"},
+ {"id":"p12","question":"K3QW：894和眼睛明显向外伸出的那件大面具，是同一件吗？","expected_document":"商青铜人面具.md"},
+ {"id":"u01","question":"今天北京到上海的高铁还有几张票？","expected_document":null},
+ {"id":"u02","question":"明天贵阳会不会下雨？","expected_document":null}
+]

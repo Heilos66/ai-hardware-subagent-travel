@@ -1,0 +1,29 @@
+{
+  "graph-dict": {
+    "known_questions": 12,
+    "top1_document_hits": 12,
+    "top5_document_hits": 12,
+    "out_of_scope_returned_counts": {
+      "u01": 5,
+      "u02": 5
+    }
+  },
+  "graph-no-dict": {
+    "known_questions": 12,
+    "top1_document_hits": 12,
+    "top5_document_hits": 12,
+    "out_of_scope_returned_counts": {
+      "u01": 3,
+      "u02": 0
+    }
+  },
+  "lmem": {
+    "known_questions": 12,
+    "top1_document_hits": 10,
+    "top5_document_hits": 12,
+    "out_of_scope_returned_counts": {
+      "u01": 5,
+      "u02": 5
+    }
+  }
+}

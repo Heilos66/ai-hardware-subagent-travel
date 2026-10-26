@@ -1,0 +1,199 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.85kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:21-jdk-noble
+#2 DONE 2.8s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre-noble
+#3 DONE 3.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [ame_builder 1/6] FROM docker.io/library/eclipse-temurin:21-jdk-noble@sha256:107215954359f1ab0be058a247d7c64ed6e69c71c1682d471d38ef751ec8e964
+#5 resolve docker.io/library/eclipse-temurin:21-jdk-noble@sha256:107215954359f1ab0be058a247d7c64ed6e69c71c1682d471d38ef751ec8e964 0.0s done
+#5 DONE 0.0s
+
+#6 [stage-2 1/9] FROM docker.io/library/eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c
+#6 resolve docker.io/library/eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 27.22kB 0.0s done
+#7 DONE 0.0s
+
+#8 [stage-2 2/9] RUN apt-get update && apt-get install -y --no-install-recommends python3 libstdc++6  && rm -rf /var/lib/apt/lists/*  && groupadd --gid 10001 agent && useradd --uid 10001 --gid agent --create-home agent
+#8 CACHED
+
+#9 [java_builder 6/7] COPY src/main ./src/main
+#9 CACHED
+
+#10 [stage-2 3/9] WORKDIR /app
+#10 CACHED
+
+#11 [java_builder 7/7] RUN ./mvnw -B -DskipTests package
+#11 CACHED
+
+#12 [java_builder 3/7] COPY mvnw pom.xml ./
+#12 CACHED
+
+#13 [java_builder 5/7] RUN chmod +x mvnw && ./mvnw -B -DskipTests dependency:go-offline
+#13 CACHED
+
+#14 [java_builder 2/7] WORKDIR /build
+#14 CACHED
+
+#15 [java_builder 4/7] COPY .mvn ./.mvn
+#15 CACHED
+
+#16 [stage-2 4/9] COPY --from=java_builder --chown=agent:agent /build/target/travel-agent.jar /app/app.jar
+#16 CACHED
+
+#17 [ame_builder 2/6] RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ && rm -rf /var/lib/apt/lists/*
+#17 CACHED
+
+#18 [ame_builder 3/6] RUN apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*
+#18 CACHED
+
+#19 [ame_builder 4/6] COPY upstream /build/ame
+#19 CACHED
+
+#20 [ame_builder 5/6] COPY harness /build/harness
+#20 CACHED
+
+#21 [ame_builder 6/6] RUN cmake -S /build/harness -B /build/out -DAME_SOURCE=/build/ame -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-include cstdint"  && cmake --build /build/out --target ame_kb_worker -j 4
+#21 0.147 -- The CXX compiler identification is GNU 13.3.0
+#21 0.153 -- Detecting CXX compiler ABI info
+#21 0.190 -- Detecting CXX compiler ABI info - done
+#21 0.194 -- Check for working CXX compiler: /usr/bin/c++ - skipped
+#21 0.194 -- Detecting CXX compile features
+#21 0.194 -- Detecting CXX compile features - done
+#21 0.206 -- Configuring done (0.1s)
+#21 0.238 -- Generating done (0.0s)
+#21 0.240 -- Build files have been written to: /build/out
+#21 0.261 [  2%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/types.cpp.o
+#21 0.261 [  4%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/json.cpp.o
+#21 0.262 [  6%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/uid.cpp.o
+#21 0.262 [  8%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/log.cpp.o
+#21 0.596 [ 10%] Linking CXX static library libame_core.a
+#21 0.610 [ 10%] Built target ame_core
+#21 0.617 [ 12%] Building CXX object upstream/memfact/CMakeFiles/ame_memfact.dir/src/memfact.cpp.o
+#21 0.617 [ 14%] Building CXX object upstream/storage/CMakeFiles/ame_storage.dir/src/storage.cpp.o
+#21 0.617 [ 17%] Building CXX object upstream/memobs/CMakeFiles/ame_memobs.dir/src/memobs.cpp.o
+#21 0.617 [ 19%] Building CXX object upstream/feedback/CMakeFiles/ame_feedback.dir/src/feedback_collector.cpp.o
+#21 1.356 [ 21%] Linking CXX static library libame_feedback.a
+#21 1.368 [ 21%] Built target ame_feedback
+#21 1.517 [ 23%] Linking CXX static library libame_memfact.a
+#21 1.529 [ 23%] Built target ame_memfact
+#21 1.557 [ 25%] Linking CXX static library libame_memobs.a
+#21 1.568 [ 25%] Built target ame_memobs
+#21 1.575 [ 27%] Building CXX object upstream/memindex/CMakeFiles/ame_memindex.dir/src/memindex.cpp.o
+#21 1.882 [ 29%] Linking CXX static library libame_storage.a
+#21 1.893 [ 29%] Built target ame_storage
+#21 1.900 [ 34%] Building CXX object upstream/keyword/CMakeFiles/ame_keyword.dir/src/keyword_manager.cpp.o
+#21 1.900 [ 34%] Building CXX object upstream/time/CMakeFiles/ame_time.dir/src/time_service.cpp.o
+#21 1.900 [ 36%] Building CXX object upstream/vector/CMakeFiles/ame_vector.dir/src/vector_service.cpp.o
+#21 2.145 [ 38%] Linking CXX static library libame_time.a
+#21 2.156 [ 38%] Built target ame_time
+#21 2.163 [ 40%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/extractor.cpp.o
+#21 2.182 [ 42%] Linking CXX static library libame_vector.a
+#21 2.193 [ 42%] Built target ame_vector
+#21 2.201 [ 44%] Building CXX object upstream/entity/CMakeFiles/ame_entity.dir/src/entity_resolver.cpp.o
+#21 2.456 [ 46%] Linking CXX static library libame_keyword.a
+#21 2.468 [ 46%] Built target ame_keyword
+#21 2.472 [ 48%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/ac_automaton.cpp.o
+#21 2.571 [ 51%] Linking CXX static library libame_memindex.a
+#21 2.584 [ 51%] Built target ame_memindex
+#21 2.591 [ 53%] Building CXX object upstream/diffusion/CMakeFiles/ame_diffusion.dir/src/diffusion_engine.cpp.o
+#21 2.907 [ 55%] Building CXX object upstream/extractor/CMakeFiles/ame_extractor.dir/src/dat_trie.cpp.o
+#21 3.170 [ 57%] Linking CXX static library libame_entity.a
+#21 3.181 [ 57%] Built target ame_entity
+#21 3.187 [ 59%] Building CXX object upstream/memview/CMakeFiles/ame_memview.dir/src/memview.cpp.o
+#21 3.305 [ 61%] Linking CXX static library libame_diffusion.a
+#21 3.316 [ 61%] Built target ame_diffusion
+#21 3.322 [ 63%] Building CXX object upstream/rerank/CMakeFiles/ame_rerank.dir/src/reranker.cpp.o
+#21 3.331 [ 65%] Linking CXX static library libame_extractor.a
+#21 3.342 [ 65%] Built target ame_extractor
+#21 3.349 [ 70%] Building CXX object upstream/graph_writer/CMakeFiles/ame_graph_writer.dir/src/graph_writer.cpp.o
+#21 3.349 [ 70%] Building CXX object upstream/seed/CMakeFiles/ame_seed.dir/src/seed_generator.cpp.o
+#21 3.537 /build/ame/seed/src/seed_generator.cpp: In function ‘void ame::mint_inflections(const std::string&, std::vector<std::pair<std::__cxx11::basic_string<char>, float> >&)’:
+#21 3.537 /build/ame/seed/src/seed_generator.cpp:63:31: warning: suggest parentheses around ‘&&’ within ‘||’ [-Wparentheses]
+#21 3.537    63 |                 w.size() >= 2 && (w.compare(w.size() - 2, 2, "ch") == 0 ||
+#21 3.537       |                 ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#21 3.537    64 |                                   w.compare(w.size() - 2, 2, "sh") == 0));
+#21 3.537       |                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#21 3.862 [ 70%] Linking CXX static library libame_rerank.a
+#21 3.873 [ 70%] Built target ame_rerank
+#21 3.880 [ 72%] Building CXX object upstream/learning/CMakeFiles/ame_learning.dir/src/learning_engine.cpp.o
+#21 4.016 [ 74%] Linking CXX static library libame_graph_writer.a
+#21 4.029 [ 74%] Built target ame_graph_writer
+#21 4.032 [ 76%] Building CXX object upstream/learning/CMakeFiles/ame_learning.dir/src/gate_model.cpp.o
+#21 4.126 [ 78%] Linking CXX static library libame_memview.a
+#21 4.139 [ 78%] Built target ame_memview
+#21 4.146 [ 80%] Building CXX object upstream/mem/CMakeFiles/ame_mem.dir/src/mem.cpp.o
+#21 4.587 [ 82%] Linking CXX static library libame_learning.a
+#21 4.598 [ 82%] Built target ame_learning
+#21 4.652 [ 85%] Linking CXX static library libame_seed.a
+#21 4.664 [ 85%] Built target ame_seed
+#21 4.670 [ 87%] Building CXX object upstream/thinker/CMakeFiles/ame_thinker.dir/src/thinker.cpp.o
+#21 5.000 [ 89%] Linking CXX static library libame_mem.a
+#21 5.011 [ 89%] Built target ame_mem
+#21 5.157 /build/ame/thinker/src/thinker.cpp: In member function ‘ame::ReasoningChain ame::Thinker::think_ircot(const std::string&, int, const std::function<std::__cxx11::basic_string<char>(const std::__cxx11::basic_string<char>&)>&, int)’:
+#21 5.157 /build/ame/thinker/src/thinker.cpp:187:52: warning: ‘%02d’ directive output may be truncated writing between 2 and 11 bytes into a region of size between 0 and 16 [-Wformat-truncation=]
+#21 5.157   187 |       std::snprintf(dbuf, sizeof(dbuf), "%04d-%02d-%02d", tm.tm_year + 1900,
+#21 5.157       |                                                    ^~~~
+#21 5.157 In file included from /usr/include/stdio.h:980,
+#21 5.157                  from /usr/include/c++/13/cstdio:42,
+#21 5.157                  from /usr/include/c++/13/ext/string_conversions.h:45,
+#21 5.157                  from /usr/include/c++/13/bits/basic_string.h:4109,
+#21 5.157                  from /usr/include/c++/13/string:54,
+#21 5.157                  from /build/ame/core/include/ame/core/types.h:14,
+#21 5.157                  from /build/ame/thinker/include/ame/thinker/thinker.h:24,
+#21 5.157                  from /build/ame/thinker/src/thinker.cpp:27:
+#21 5.157 In function ‘int snprintf(char*, size_t, const char*, ...)’,
+#21 5.157     inlined from ‘ame::ReasoningChain ame::Thinker::think_ircot(const std::string&, int, const std::function<std::__cxx11::basic_string<char>(const std::__cxx11::basic_string<char>&)>&, int)’ at /build/ame/thinker/src/thinker.cpp:187:20:
+#21 5.157 /usr/include/aarch64-linux-gnu/bits/stdio2.h:54:35: note: ‘__builtin___snprintf_chk’ output between 11 and 36 bytes into a destination of size 24
+#21 5.157    54 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+#21 5.157       |          ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#21 5.157    55 |                                    __glibc_objsize (__s), __fmt,
+#21 5.157       |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#21 5.157    56 |                                    __va_arg_pack ());
+#21 5.157       |                                    ~~~~~~~~~~~~~~~~~
+#21 5.356 [ 91%] Linking CXX static library libame_thinker.a
+#21 5.366 [ 91%] Built target ame_thinker
+#21 5.372 [ 93%] Building CXX object upstream/engine/CMakeFiles/ame_engine.dir/src/engine.cpp.o
+#21 6.407 [ 95%] Linking CXX static library libame_engine.a
+#21 6.418 [ 95%] Built target ame_engine
+#21 6.423 [ 97%] Building CXX object CMakeFiles/ame_kb_worker.dir/worker.cpp.o
+#21 7.216 [100%] Linking CXX executable ame_kb_worker
+#21 7.250 [100%] Built target ame_kb_worker
+#21 DONE 7.3s
+
+#22 [stage-2 5/9] COPY --from=ame_builder --chown=agent:agent /build/out/ame_kb_worker /app/ame/ame_kb_worker
+#22 DONE 0.0s
+
+#23 [stage-2 6/9] COPY --from=ame_builder --chown=agent:agent /build/ame/lexicon/lexicon_src/segmentation/merged.txt /app/ame/source/lexicon/lexicon_src/segmentation/merged.txt
+#23 DONE 0.0s
+
+#24 [stage-2 7/9] COPY --chown=agent:agent harness/run.py harness/serve.py /app/ame/
+#24 DONE 0.0s
+
+#25 [stage-2 8/9] COPY --chown=agent:agent harness/fixtures/corpus.json /app/ame/fixtures/corpus.json
+#25 DONE 0.0s
+
+#26 [stage-2 9/9] COPY --chown=agent:agent start.py /app/start.py
+#26 DONE 0.0s
+
+#27 exporting to image
+#27 exporting layers
+#27 exporting layers 0.6s done
+#27 exporting manifest sha256:073f92e0719409db4b18313f1fc74f00fb27c5bd1a0a5d22ecf8a675ecc59222 done
+#27 exporting config sha256:8cc05808650fb68d2e26eb2ae63b8998a5b6a12657599fa5e532ce758d41c94f done
+#27 naming to docker.io/library/travel-agent:ame-20261026-01 done
+#27 unpacking to docker.io/library/travel-agent:ame-20261026-01
+#27 unpacking to docker.io/library/travel-agent:ame-20261026-01 0.3s done
+#27 DONE 0.9s

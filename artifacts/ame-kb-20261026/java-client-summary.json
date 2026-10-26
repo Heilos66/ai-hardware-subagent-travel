@@ -1,0 +1,9 @@
+{
+  "n": 200,
+  "p50_ms": 8.672458,
+  "p95_ms": 10.277667,
+  "max_ms": 11.615458,
+  "connection": "Java WebClient with default pooling; loopback HTTP",
+  "warmup": 20,
+  "measurement": "RagFlowClient.search through returned parsed chunks; no LLM generation"
+}

@@ -1,0 +1,11 @@
+{
+  "remote-manifest.json": "073f92e0719409db4b18313f1fc74f00fb27c5bd1a0a5d22ecf8a675ecc59222",
+  "provenance.json": "1d87b545b112240c1191df2e965447397e1c8c7639ab52758c27367d8a199348",
+  "build-inputs.json": "7f133e29fbb99ffb307065e5e46a39fb382db56971e49eb6e9edf65073796e06",
+  "ame-container-verification.json": "a909895467de50685680c09457c9889aa8b392421571a494dfb44f76036f2655",
+  "release.json": "aebd01c5231cbf57f9412256174a6de2e4bdb5ce4827ebb18993b513ac33f8c0",
+  "ame-swr-push.log": "5861e240592f9fe0193a82a560aaab7316a930c20dd9fd9cdbf424fbeb77215f",
+  "ame-container-smoke-result.txt": "a19cc6907d3f9ff7eb88bd1cca930eb17bca6410f22a13039793b95baecd4328",
+  "ame-swr-pull.log": "3833f9407d2869734c52228ee38c7e1e76cb6fc33516af39fb6c62c81bf08220",
+  "ame-image-build.log": "def1313130246cf257b92e489f14716d566326538bce298fb643d5116d1973c1"
+}

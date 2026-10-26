@@ -1,0 +1,10 @@
+{
+  "branch": "codex/ame-knowledge-latency",
+  "base_commit": "e01cdc89295f55676871fd6fbf682202eeb4e896",
+  "includes_uncommitted_integration": true,
+  "ame_commit": "26ce43e2b34be958b84edb4dcf834291ffa820b6",
+  "corpus_chunks": 52,
+  "corpus_sha256": "ee35a0667e589f89cfbf8e423939adc28581ef8934dc59eef99db658daa9ec21",
+  "platform": "linux/arm64",
+  "tag": "ame-20261026-01"
+}

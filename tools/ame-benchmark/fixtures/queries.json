@@ -1,0 +1,102 @@
+[
+  {
+    "id": 0,
+    "question": "长信宫灯收藏在哪个博物馆？",
+    "expected_document": "长信宫灯.md"
+  },
+  {
+    "id": 1,
+    "question": "长信宫灯如何处理烟尘？",
+    "expected_document": "长信宫灯.md"
+  },
+  {
+    "id": 2,
+    "question": "长信宫灯出土于哪里？",
+    "expected_document": "长信宫灯.md"
+  },
+  {
+    "id": 3,
+    "question": "长信宫灯的灯罩有什么作用？",
+    "expected_document": "长信宫灯.md"
+  },
+  {
+    "id": 4,
+    "question": "长信宫灯是用什么材料制成的？",
+    "expected_document": "长信宫灯.md"
+  },
+  {
+    "id": 5,
+    "question": "秦始皇兵马俑是什么时候发现的？",
+    "expected_document": "秦始皇兵马俑.md"
+  },
+  {
+    "id": 6,
+    "question": "兵马俑原来有彩绘吗？",
+    "expected_document": "秦始皇兵马俑.md"
+  },
+  {
+    "id": 7,
+    "question": "兵马俑一号坑有什么特点？",
+    "expected_document": "秦始皇兵马俑.md"
+  },
+  {
+    "id": 8,
+    "question": "兵马俑为什么会有不同的面貌？",
+    "expected_document": "秦始皇兵马俑.md"
+  },
+  {
+    "id": 9,
+    "question": "参观兵马俑需要注意哪些文物保护问题？",
+    "expected_document": "秦始皇兵马俑.md"
+  },
+  {
+    "id": 10,
+    "question": "唐三彩载乐骆驼俑有什么特点？",
+    "expected_document": "唐三彩载乐骆驼俑.md"
+  },
+  {
+    "id": 11,
+    "question": "唐三彩中的三彩是否只有三种颜色？",
+    "expected_document": "唐三彩载乐骆驼俑.md"
+  },
+  {
+    "id": 12,
+    "question": "唐三彩载乐骆驼俑反映了怎样的文化交流？",
+    "expected_document": "唐三彩载乐骆驼俑.md"
+  },
+  {
+    "id": 13,
+    "question": "唐三彩载乐骆驼俑是用什么材料制作的？",
+    "expected_document": "唐三彩载乐骆驼俑.md"
+  },
+  {
+    "id": 14,
+    "question": "唐三彩载乐骆驼俑上的人物在做什么？",
+    "expected_document": "唐三彩载乐骆驼俑.md"
+  },
+  {
+    "id": 15,
+    "question": "商青铜人面具的材质是什么？",
+    "expected_document": "商青铜人面具.md"
+  },
+  {
+    "id": 16,
+    "question": "商青铜人面具属于哪个时代？",
+    "expected_document": "商青铜人面具.md"
+  },
+  {
+    "id": 17,
+    "question": "商青铜人面具有什么造型特征？",
+    "expected_document": "商青铜人面具.md"
+  },
+  {
+    "id": 18,
+    "question": "商青铜人面具的用途能够确定吗？",
+    "expected_document": "商青铜人面具.md"
+  },
+  {
+    "id": 19,
+    "question": "介绍商青铜人面具时需要避免哪些误解？",
+    "expected_document": "商青铜人面具.md"
+  }
+]
