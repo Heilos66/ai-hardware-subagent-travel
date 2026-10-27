@@ -6,7 +6,7 @@
 -- Detecting CXX compile features - done
 -- Configuring done (0.3s)
 -- Generating done (0.1s)
--- Build files have been written to: /Users/heilos/Developer/company/workflow/target/ame-v3/baseline-build
+-- Build files have been written to: ./target/ame-v3/baseline-build
 [  4%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/uid.cpp.o
 [  4%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/json.cpp.o
 [  6%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/types.cpp.o

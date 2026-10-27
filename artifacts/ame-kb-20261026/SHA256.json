@@ -1,8 +1,8 @@
 {
-  "java-integration-test.txt": "2c89d4dcdd5a2053c288170b88ee534ab9b350b16d160a3fd24848b4f767f27a",
+  "java-integration-test.txt": "e2d0be5b0ee1d95fc2c2969fd7fe49b45d69b9b7dd28f62ffe419317c651dc85",
   "java-client-summary.json": "979e3026e7be20c489765bd9cceb524abd506f3fb0de0a1354bad60f251b4d92",
   "java-client-samples.json": "2ce6bcb294ea5f2a108f1cb606292895b1a4d29df915a4214ce1e9ca5431c4a9",
-  "ragflow-configuration-test.txt": "154e0a91abcff3a09aa4e909a4f2eba1d117e3ecd9b6d1ef89b54d9438e7d32a",
+  "ragflow-configuration-test.txt": "59d1bc4d0ea31435d9e364dc35189ed6a3e6c6e4b70f9fe9a58d2de891b8c318",
   "http-20261026/summary.json": "37010738715af8fd99a0c0a2eb4b3e27104654a25fcb2a6c78438409e124a04c",
   "http-20261026/samples.jsonl.gz": "efbbf2af0b0df0e7cd04d208ee9cac33f400693ad9a48044807f3f1507350fc6",
   "local-20261026/graph-dict-warmup.json": "24c3cce3af87991b336779d499e5b59455a9343fd1d4a9aa4e95f096ed189168",

@@ -22,6 +22,8 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 │   ├── logging.md     # 日志打点、AgentArts/LTS 保存与查看
 │   └── ragflow-travel-agent-integration.md # 当前 RAGFlow 接入与参考文档
 ├── references/        # 本地 IO 示例、原始工作流 JSONL（Git 忽略）
+├── tools/ame-benchmark/ # AME 本地检索、验证与镜像构建工具
+├── artifacts/         # 已归档验证记录，脱敏说明见 artifacts/README.md
 ├── .mvn/              # Maven Wrapper 配置
 ├── .env.example       # 环境变量模板
 ├── pom.xml
@@ -31,7 +33,7 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 
 `.env` 保存本机配置，`references/io_spec.md` 用于真实请求测试；两者与原始 `workflow_文旅逛展_1_20260924171300.jsonl` 均保留在本机，不进入 Git 或镜像。`target/` 为可重新生成的构建和日志目录。
 
-Maven 坐标为 `com.travel:travel-agent`。源码、测试和日志类名统一使用 `com.travel.agent`。
+Maven 坐标为 `com.travel:travel-agent`。源码、测试和日志类名统一使用 `com.travel.agent`，历史验证记录的脱敏规则见 [归档说明](artifacts/README.md)。
 
 ## 本地启动
 

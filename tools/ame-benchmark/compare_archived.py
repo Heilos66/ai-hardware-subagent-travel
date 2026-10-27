@@ -1,12 +1,12 @@
 """Compare saved retrieval responses; never treats document match as answer accuracy."""
-import gzip,json,hashlib,statistics,math
+import gzip,json,hashlib,statistics,math,os
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'artifacts/ame-ragflow-comparison-20261026';OUT.mkdir(exist_ok=True)
 SOURCES={'ragflow32':ROOT.parent/'ragflow-ecs-20261021/ragflow-paced60-20261021/samples.jsonl','ragflow8':ROOT.parent/'ragflow-ecs-20261021/ragflow-paced60-k8-20261021/samples.jsonl','ame':ROOT/'artifacts/ame-kb-20261026/http-20261026/samples.jsonl.gz'}
 allrows={};summaries={};hashes={}
 for name,p in SOURCES.items():
- hashes[str(p)]=hashlib.sha256(p.read_bytes()).hexdigest()
+ hashes[Path(os.path.relpath(p,ROOT)).as_posix()]=hashlib.sha256(p.read_bytes()).hexdigest()
  with (gzip.open(p,'rt') if p.suffix=='.gz' else p.open()) as f:rows=[json.loads(l) for l in f]
  unique={};variants={}
  for r in rows:

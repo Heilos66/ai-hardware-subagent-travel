@@ -6,7 +6,7 @@
 -- Detecting CXX compile features - done
 -- Configuring done (0.5s)
 -- Generating done (0.1s)
--- Build files have been written to: /Users/heilos/Developer/company/workflow/target/ame-v3/build
+-- Build files have been written to: ./target/ame-v3/build
 [ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/json.cpp.o
 [ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/types.cpp.o
 [ 12%] Building CXX object upstream/core/CMakeFiles/ame_core.dir/src/uid.cpp.o
@@ -36,25 +36,25 @@
 [ 67%] Building CXX object upstream/graph_writer/CMakeFiles/ame_graph_writer.dir/src/graph_writer.cpp.o
 [ 70%] Linking CXX static library libame_entity.a
 [ 70%] Built target ame_entity
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:63:31: warning: '&&' within '||' [-Wlogical-op-parentheses]
+./target/ame-v3/source/seed/src/seed_generator.cpp:63:31: warning: '&&' within '||' [-Wlogical-op-parentheses]
    62 |   bool es_pl = (last == 's' || last == 'x' || last == 'z' ||
       |                                                           ~~
    63 |                 w.size() >= 2 && (w.compare(w.size() - 2, 2, "ch") == 0 ||
       |                 ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    64 |                                   w.compare(w.size() - 2, 2, "sh") == 0));
       |                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:63:31: note: place parentheses around the '&&' expression to silence this warning
+./target/ame-v3/source/seed/src/seed_generator.cpp:63:31: note: place parentheses around the '&&' expression to silence this warning
    63 |                 w.size() >= 2 && (w.compare(w.size() - 2, 2, "ch") == 0 ||
       |                               ^
       |                 (
    64 |                                   w.compare(w.size() - 2, 2, "sh") == 0));
       |
       |                                                                         )
-In file included from /Users/heilos/Developer/company/workflow/target/ame-v3/source/diffusion/src/diffusion_engine.cpp:20:
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/diffusion/include/ame/diffusion/diffusion_engine.h:85:19: warning: private field 'kw_' is not used [-Wunused-private-field]
+In file included from ./target/ame-v3/source/diffusion/src/diffusion_engine.cpp:20:
+./target/ame-v3/source/diffusion/include/ame/diffusion/diffusion_engine.h:85:19: warning: private field 'kw_' is not used [-Wunused-private-field]
    85 |   KeywordManager* kw_;  // 休眠关键词判定（可空，空则查节点 status）
       |                   ^
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/seed/src/seed_generator.cpp:49:13: warning: unused function 'mint_inflections' [-Wunused-function]
+./target/ame-v3/source/seed/src/seed_generator.cpp:49:13: warning: unused function 'mint_inflections' [-Wunused-function]
    49 | static void mint_inflections(const std::string& w,
       |             ^~~~~~~~~~~~~~~~
 [ 74%] Linking CXX static library libame_graph_writer.a
@@ -66,11 +66,11 @@ In file included from /Users/heilos/Developer/company/workflow/target/ame-v3/sou
 2 warnings generated.
 [ 83%] Linking CXX static library libame_seed.a
 [ 83%] Built target ame_seed
-In file included from /Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/src/reranker.cpp:28:
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/include/ame/rerank/reranker.h:76:16: warning: private field 'ts_' is not used [-Wunused-private-field]
+In file included from ./target/ame-v3/source/rerank/src/reranker.cpp:28:
+./target/ame-v3/source/rerank/include/ame/rerank/reranker.h:76:16: warning: private field 'ts_' is not used [-Wunused-private-field]
    76 |   TimeService& ts_;
       |                ^
-/Users/heilos/Developer/company/workflow/target/ame-v3/source/rerank/include/ame/rerank/reranker.h:77:18: warning: private field 'vec_' is not used [-Wunused-private-field]
+./target/ame-v3/source/rerank/include/ame/rerank/reranker.h:77:18: warning: private field 'vec_' is not used [-Wunused-private-field]
    77 |   VectorService& vec_;
       |                  ^
 2 warnings generated.
