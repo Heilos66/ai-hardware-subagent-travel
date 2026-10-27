@@ -8,8 +8,12 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 
 ```text
 .
-├── src/main/          # 应用代码、配置和日志
-├── src/test/          # 回归测试
+├── src/main/
+│   ├── java/com/travel/agent/ # 应用代码，统一包名 com.travel.agent
+│   └── resources/     # 应用配置和日志配置
+├── src/test/
+│   ├── java/com/travel/agent/ # 回归测试
+│   └── resources/     # 测试日志配置
 ├── scripts/           # IO、IAM 调用、日志验证脚本及客户端测试
 ├── docs/
 │   ├── deployment.md  # 镜像、SWR、AgentArts 部署
@@ -26,6 +30,8 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArt
 ```
 
 `.env` 保存本机配置，`references/io_spec.md` 用于真实请求测试；两者与原始 `workflow_文旅逛展_1_20260924171300.jsonl` 均保留在本机，不进入 Git 或镜像。`target/` 为可重新生成的构建和日志目录。
+
+Maven 坐标为 `com.travel:travel-agent`。源码、测试和日志类名统一使用 `com.travel.agent`。
 
 ## 本地启动
 
@@ -126,7 +132,7 @@ java -jar target/travel-agent.jar
 - operation 缺省、null 或空字符串按 chat_completions 处理。query_capabilities 返回三项能力；create_response/fetch_response 不受支持。
 - openai-compatible 直接调用完整 endpoint，使用 Bearer Token；其他 provider 保留原 temp_token/action/model_request 代理协议及 /invocations/stream 路径。
 - 所有模型请求固定 stream=true。chat_template_kwargs 和 thinking 支持对象或对象的 JSON 字符串，解析后按原字段名透传；未传/null 时省略，空对象保留，两项均传时均保留。
-- 不维护模型会话历史，enable_history=false。最新系统提示词见 [Prompts.java](src/main/java/com/heilos/travel/Prompts.java)。
+- 不维护模型会话历史，enable_history=false。最新系统提示词见 [Prompts.java](src/main/java/com/travel/agent/Prompts.java)。
 
 SSE 顺序为 workflow_started、node_started、message、workflow_finished、end。message.data.text 与 message.data.reasoning_content 都是增量，各自拼接；最终 responseContent 是 JSON 字符串，成功解析为 `{"code":"0","message":"正文"}`，只包含正文。能力查询的 message.text 和最终结果为能力 JSON 字符串，字段为 chat_completions/create_response/fetch_response。
 

@@ -1,4 +1,4 @@
-package com.heilos.travel;
+package com.travel.agent;
 
 import java.time.Duration;
 import org.springframework.boot.SpringApplication;

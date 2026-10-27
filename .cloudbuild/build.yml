@@ -1,0 +1,50 @@
+# .cloudbuild/build.yml
+# 适配项目：ai-hardware-subagent-travel
+#   语言/构建：Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9 + Maven 3.9.11（mvnw wrapper 3.3.4）
+#   产物：target/travel-agent.jar（pom finalName=travel-agent）
+#
+# 字段依据（来自 aihardware-pipeline-config skill minimal-templates.md §1，2026-10-23/26 检索）：
+#   - cloudbuild2.0 build.yml 至少含构建参数、构建环境、构建步骤三个要素（id 2090937360848048128, 3MS）
+#   - CloudBuild2.0 build.yml 配置（id 2050467288351002627, 3MS）
+#   - CloudBuild2.0 支持配置哪些步骤（id 664483445145706499, itServiceCenter）
+#   - 构建环境 toolbox 方式说明（id 664483452494127105, itServiceCenter）
+# 本流水线目的：满足项目 only_allow_merge_if_pipeline_succeeds 门禁（流水线必须成功才能合并 MR）。
+
+version: '2.0'                       # 必填
+
+env:                                # 必填：label(VM) 或 resource.type+image(容器)
+  resource:
+    type: docker
+    # 与项目 Dockerfile 构建阶段一致；eclipse-temurin:21-jdk-noble 提供 JDK 21
+    # mvnw 按 .mvn/wrapper/maven-wrapper.properties 从 Maven Central 下载 apache-maven 3.9.11（需出网）
+    # 待核验：CloudBuild 构建环境能否拉取 Docker Hub 镜像；不能则改用 SWR 内部镜像或公司 Java 基础镜像
+    image: eclipse-temurin:21-jdk-noble
+    class: 8U16G                    # 默认 4U4G 偏紧；JDK 21 + Spring 上下文 + Maven 依赖下载较重，8U16G 留余量
+    mode: toolbox                   # CloudBuild2.0 构建环境方式之一（id 664483452494127105）
+
+params:                             # 可选；无参数可整段省略，此处保留模板默认
+  - name: CB_AUTO_CHECK_VERSION
+    value: '2.0'
+
+steps:
+  PRE_BUILD:                        # 可选：源码检出；CID_REPO_URL/CID_REPO_BRANCH 由 CloudBuild 平台注入
+    - codehub:
+        path: .
+        url: ${{ CID_REPO_URL }}
+        revision: ${{ CID_REPO_BRANCH }}
+
+  BUILD:                            # 必填：单一构建入口（复用项目 mvnw，不另起 build.sh）
+    - build_execute:
+        # chmod 兜底防止 checkout 丢执行位（仓库内 mvnw 实际 755，Linux 容器一般保留）
+        # -B 批处理、-ntp 不打印 transfer/progress 噪声
+        # test 跑单测；测试用 mock WebClient（如 missingClassifierKeyAndSearchConfigDoNotCallNetwork 显式不调网络），不依赖外部服务
+        # 想出 jar 改 package；想跑集成测试改 verify
+        command: sh -c 'chmod +x mvnw && ./mvnw -B -ntp test'
+
+  # POST_BUILD 暂不配置：本流水线只为 MR 合并门禁，不需要归档 jar。
+  # 后续若要持续交付，按 minimal-templates.md §3.1 加：
+  # POST_BUILD:
+  #   - hwcloud_artifact:
+  #       version: '1.0'
+  #       package:
+  #         - target/travel-agent.jar

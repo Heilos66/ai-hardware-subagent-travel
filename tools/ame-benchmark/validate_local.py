@@ -37,7 +37,7 @@ def main():
                         subprocess.run([str(root/'mvnw'),'-q','-Dtest=AmeRetrievalIntegrationTest,RagFlowConfigurationTest','test'],cwd=root,env=env,stdout=output,stderr=subprocess.STDOUT,check=True)
                     (a.out/'java-client-samples.json').write_bytes((root/'target/ame-validation/java-client-samples.json').read_bytes())
                     for name in ['AmeRetrievalIntegrationTest','RagFlowConfigurationTest']:
-                        p=root/'target/surefire-reports'/('com.heilos.travel.'+name+'.txt')
+                        p=root/'target/surefire-reports'/('com.travel.agent.'+name+'.txt')
                         (a.out/(name+'.txt')).write_bytes(p.read_bytes())
                 print(mode+' HTTP and integration checks passed',flush=True)
             finally:

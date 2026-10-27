@@ -81,7 +81,7 @@ IAM 模式按平台签名规则调用。Session ID 是平台会话标识，不�
 
 IAM 实践使用 `V11-HMAC-SHA256` 和实际区域（本项目为 `cn-southwest-2`）；调用运行时数据面时设置 `X-Sdk-Content-Sha256: UNSIGNED-PAYLOAD`，由 SDK 生成 `X-Sdk-Date` 和签名头，同时携带会话 ID。签名应随请求生成，不能用固定 Bearer 字符串替代。API Key 则从运行时详情的权限与访问控制入口，进入 AgentIdentity 获取。[IAM 签名示例](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0063.html)、[API Key 获取方式](https://support.huaweicloud.com/bestpractice-agentarts/agentarts_06_0042.html)
 
-文旅服务的 [AgentController](../src/main/java/com/heilos/travel/AgentController.java) 不做入站验签，符合网关先鉴权的托管方式；仅为选择 IAM 或 API Key，无需引入巫山或重新构建镜像。直接访问本地容器时没有这层平台认证。运行时 API Key、`CLASSIFIER_API_KEY` 和 `model_config.auth_token` 分别用于平台入口、图片分类器和模型，互不替代。
+文旅服务的 [AgentController](../src/main/java/com/travel/agent/AgentController.java) 不做入站验签，符合网关先鉴权的托管方式；仅为选择 IAM 或 API Key，无需引入巫山或重新构建镜像。直接访问本地容器时没有这层平台认证。运行时 API Key、`CLASSIFIER_API_KEY` 和 `model_config.auth_token` 分别用于平台入口、图片分类器和模型，互不替代。
 
 音频工程的 IAM 代码属于同仓库附带的调用、部署工具，不代表业务服务端自行验签。2026-10-10 按同一固定提交补充核对：
 

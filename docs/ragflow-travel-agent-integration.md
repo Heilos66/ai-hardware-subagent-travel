@@ -4,7 +4,7 @@
 
 ## 本工程接入与验证
 
-2026-10-12：根据新提供的 v2.0 接入说明，新增重排开关与 A1 候选数参数。使用现有异步 WebClient 实现 [RagFlowClient](../src/main/java/com/heilos/travel/RagFlowClient.java)，由 [ExternalServices](../src/main/java/com/heilos/travel/ExternalServices.java) 接入原有检索入口。沿用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.9，不增加 Maven 依赖。没有使用下面示例的同步 RestClient、`.call()` 或替换控制器。
+2026-10-12：根据新提供的 v2.0 接入说明，新增重排开关与 A1 候选数参数。使用现有异步 WebClient 实现 [RagFlowClient](../src/main/java/com/travel/agent/RagFlowClient.java)，由 [ExternalServices](../src/main/java/com/travel/agent/ExternalServices.java) 接入原有检索入口。沿用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.9，不增加 Maven 依赖。没有使用下面示例的同步 RestClient、`.call()` 或替换控制器。
 
 三条路径保持原有规则：纯文本使用原问题查询 RAGFlow；图片分类名称非空且置信度 ≥ 0.7 时，以“检索关于{名称}的文档”查询同一个 travel_kb，再调用文本模型；其余图片调用视觉模型。检索片段交给现有 Prompts 构建上下文，仍使用原有纯文本、短回答提示词；不会要求模型展示 document_keyword 等来源元数据。模型 stream=true、思考参数透传及 SSE 协议保持不变。
 

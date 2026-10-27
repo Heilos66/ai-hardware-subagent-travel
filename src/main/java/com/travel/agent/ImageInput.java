@@ -1,4 +1,4 @@
-package com.heilos.travel;
+package com.travel.agent;
 
 import java.net.URI;
 import java.util.Arrays;

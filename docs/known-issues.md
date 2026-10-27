@@ -14,7 +14,7 @@
 
 ### 当前实现
 
-依据：[Prompts.java](../src/main/java/com/heilos/travel/Prompts.java)、[TravelAgent.java](../src/main/java/com/heilos/travel/TravelAgent.java)、[RagFlowClient.java](../src/main/java/com/heilos/travel/RagFlowClient.java)、[WorkflowDiagnostics.java](../src/main/java/com/heilos/travel/WorkflowDiagnostics.java)。
+依据：[Prompts.java](../src/main/java/com/travel/agent/Prompts.java)、[TravelAgent.java](../src/main/java/com/travel/agent/TravelAgent.java)、[RagFlowClient.java](../src/main/java/com/travel/agent/RagFlowClient.java)、[WorkflowDiagnostics.java](../src/main/java/com/travel/agent/WorkflowDiagnostics.java)。
 
 | 位置或场景 | 当前行为 |
 | --- | --- |
