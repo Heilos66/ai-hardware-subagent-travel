@@ -1,4 +1,4 @@
-package com.heilos.travel;
+package com.travel.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.net.URI;

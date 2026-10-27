@@ -22,7 +22,7 @@
 
 应用日志行首固定使用北京时间（`Asia/Shanghai`），格式为 `yyyy-MM-dd HH:mm:ss.SSS`，例如 `2026-10-12 11:06:37.956`，不显示 `T`、`Z` 或时区后缀。时区在 Logback 格式中显式指定，不依赖宿主机/JVM 默认时区或 `TZ` 环境变量。该设置只改变日志时间的显示，`elapsed_ms`、`classify_ms` 和 `ttft_ms` 仍使用单调时钟计算；SSE 的毫秒时间戳保持原有含义。LTS 单独展示的事件/采集时间属于平台字段。
 
-应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing`、`workflow_ttft` 和 `workflow_diagnostic`，没有配置文件 Appender 或在请求线程里调用 LTS API。阶段耗时与 TTFT 共用计时队列，诊断日志使用独立队列；队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/heilos/travel/WorkflowTiming.java)、[代码：WorkflowDiagnostics.java](../src/main/java/com/heilos/travel/WorkflowDiagnostics.java)
+应用使用 `SLF4J → Logback 异步队列 → CONSOLE`，输出 `workflow_timing`、`workflow_ttft` 和 `workflow_diagnostic`，没有配置文件 Appender 或在请求线程里调用 LTS API。阶段耗时与 TTFT 共用计时队列，诊断日志使用独立队列；队列满时可以丢弃日志，以保持业务不被日志写入阻塞。[代码：logback-spring.xml](../src/main/resources/logback-spring.xml)、[代码：WorkflowTiming.java](../src/main/java/com/travel/agent/WorkflowTiming.java)、[代码：WorkflowDiagnostics.java](../src/main/java/com/travel/agent/WorkflowDiagnostics.java)
 
 建议先使用平台内置日志上报完成验收，暂不为此引入额外 SDK。**文档明确确认运行时日志会进入 LTS，但本次没有云端样本证明当前镜像的 stdout 已被收录，也没有找到任意自定义日志文件均会自动采集的承诺。**保留现有控制台输出，并按以下过程核验平台采集结果；若只有平台日志而没有应用打点，再核对目标版本、采集范围和过滤规则。
 
@@ -33,7 +33,7 @@
 | SSE 中的 `execution_id` | 应用为每次工作流生成的 ID，用于关联打点；不等于平台的 runtime ID 或 Session ID |
 | `elapsed_ms` | 本阶段或工作流的毫秒耗时；`total` 不包含客户端到平台的完整网络往返 |
 
-上表依据：[本地验证脚本](../scripts/verify_logs.sh)、[镜像构建文件](../Dockerfile)、[日志实现](../src/main/java/com/heilos/travel/WorkflowTiming.java)、[SSE 与 ID 关联实现](../src/main/java/com/heilos/travel/WorkflowEvents.java)。
+上表依据：[本地验证脚本](../scripts/verify_logs.sh)、[镜像构建文件](../Dockerfile)、[日志实现](../src/main/java/com/travel/agent/WorkflowTiming.java)、[SSE 与 ID 关联实现](../src/main/java/com/travel/agent/WorkflowEvents.java)。
 
 云端验证时先确认运行时使用含打点的镜像版本，然后发送一条业务请求，记下结束帧的 `execution_id`。在日志页面先搜索 `workflow_timing`，再按该请求 ID 检查阶段顺序：
 

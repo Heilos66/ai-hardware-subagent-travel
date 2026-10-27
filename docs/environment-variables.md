@@ -153,7 +153,7 @@ RAGFLOW_RERANK_CANDIDATES_COUNT=null
 
 删除这三个变量会恢复本工程的 `64/128/32` 默认值。关闭重排时设 `RAGFLOW_USE_RERANK=false`；重新设为 true 且保留有效 ID 即可恢复，环境变量修改后均需重启/发布运行时配置。要恢复旧客户端的请求字段，可省略三个候选数，并保持原有 `RAGFLOW_RERANK_ID` 与默认的 true 开关。
 
-实际检索请求包含 `dataset_ids`、`question`、`page=1`、`page_size`、`similarity_threshold`，并按上述规则加入候选数及重排字段。启动日志 `ragflow_config` 显示实际启用状态 `rerank_enabled` 和候选数；日志中的候选数为 null 表示不发送。实现见 [RagFlowClient.java](../src/main/java/com/heilos/travel/RagFlowClient.java)。
+实际检索请求包含 `dataset_ids`、`question`、`page=1`、`page_size`、`similarity_threshold`，并按上述规则加入候选数及重排字段。启动日志 `ragflow_config` 显示实际启用状态 `rerank_enabled` 和候选数；日志中的候选数为 null 表示不发送。实现见 [RagFlowClient.java](../src/main/java/com/travel/agent/RagFlowClient.java)。
 
 ## 图片分类器
 
@@ -211,7 +211,7 @@ CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR=true
 | `WORKFLOW_NAME` | 选填 | `文旅逛展` | SSE 中展示的工作流名称 |
 | `JAVA_TOOL_OPTIONS` | 选填 | Docker 镜像设置 `-XX:MaxRAMPercentage=70.0`；直接启动由进程环境决定 | JVM 启动参数；可调整 JVM 行为，非知识检索配置 |
 
-应用默认监听 `0.0.0.0`，健康接口为 `/ping`。以上业务默认值来源于 [AgentSettings.java](../src/main/java/com/heilos/travel/AgentSettings.java)，监听配置见 [application.properties](../src/main/resources/application.properties)，镜像默认值见 [Dockerfile](../Dockerfile)。
+应用默认监听 `0.0.0.0`，健康接口为 `/ping`。以上业务默认值来源于 [AgentSettings.java](../src/main/java/com/travel/agent/AgentSettings.java)，监听配置见 [application.properties](../src/main/resources/application.properties)，镜像默认值见 [Dockerfile](../Dockerfile)。
 
 ## 仅在本地构建或调用工具中使用的变量
 

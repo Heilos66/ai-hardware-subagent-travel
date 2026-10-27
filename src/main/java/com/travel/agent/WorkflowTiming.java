@@ -1,4 +1,4 @@
-package com.heilos.travel;
+package com.travel.agent;
 
 import java.util.HashMap;
 import java.util.Map;

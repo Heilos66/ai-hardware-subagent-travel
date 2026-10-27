@@ -1,4 +1,4 @@
-package com.heilos.travel;
+package com.travel.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

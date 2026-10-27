@@ -11,7 +11,7 @@
     <maxFlushTime>1000</maxFlushTime>
     <appender-ref ref="CONSOLE"/>
   </appender>
-  <logger name="com.heilos.travel.WorkflowTiming" level="INFO" additivity="false">
+  <logger name="com.travel.agent.WorkflowTiming" level="INFO" additivity="false">
     <appender-ref ref="TIMING_ASYNC"/>
   </logger>
   <appender name="DIAGNOSTICS_ASYNC" class="ch.qos.logback.classic.AsyncAppender">
@@ -21,7 +21,7 @@
     <maxFlushTime>1000</maxFlushTime>
     <appender-ref ref="CONSOLE"/>
   </appender>
-  <logger name="com.heilos.travel.WorkflowDiagnostics" level="INFO" additivity="false">
+  <logger name="com.travel.agent.WorkflowDiagnostics" level="INFO" additivity="false">
     <appender-ref ref="DIAGNOSTICS_ASYNC"/>
   </logger>
   <root level="INFO"><appender-ref ref="CONSOLE"/></root>
