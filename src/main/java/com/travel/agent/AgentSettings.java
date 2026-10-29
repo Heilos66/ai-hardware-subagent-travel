@@ -10,15 +10,22 @@ import org.springframework.core.env.Environment;
 
 /** Runtime configuration; never render this object in logs. */
 public final class AgentSettings {
-  final String classifierUrl, classifierKey;
-  final String workflowId, workflowName;
-  final int maxRequestBytes, maxImageBytes, maxContextChars;
+  final String classifierUrl;
+  final String classifierKey;
+  final String workflowId;
+  final String workflowName;
+  final int maxRequestBytes;
+  final int maxImageBytes;
+  final int maxContextChars;
   final double classifierThreshold;
   final boolean classifierFallbackOnTransientError;
-  final Duration classifierTimeout, modelTimeout, heartbeat;
+  final Duration classifierTimeout;
+  final Duration modelTimeout;
+  final Duration heartbeat;
   final Set<String> modelAllowedHosts;
   final RagFlow ragflow;
-  final boolean ragflowLogContent, modelLogRequest;
+  final boolean ragflowLogContent;
+  final boolean modelLogRequest;
   final int diagnosticLogMaxChars;
 
   record RagFlow(
@@ -95,19 +102,23 @@ public final class AgentSettings {
   static URI httpUri(String value) {
     try {
       URI uri = URI.create(value);
-      if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+      boolean validScheme = "http".equalsIgnoreCase(uri.getScheme())
+          || "https".equalsIgnoreCase(uri.getScheme());
+      boolean invalidPort = uri.getPort() == 0 || uri.getPort() > 65535;
+      boolean hasBadChars = value
+          .codePoints()
+          .anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c));
+      if (!validScheme
           || uri.getHost() == null
           || uri.getRawUserInfo() != null
           || uri.getRawFragment() != null
-          || uri.getPort() == 0
-          || uri.getPort() > 65535
-          || value
-              .codePoints()
-              .anyMatch(c -> Character.isWhitespace(c) || Character.isISOControl(c)))
+          || invalidPort
+          || hasBadChars) {
         throw new IllegalArgumentException();
+      }
       return uri;
     } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException("必须是有效的HTTP(S)地址，不能包含凭证或fragment");
+      throw new IllegalArgumentException("必须是有效的HTTP(S)地址，不能包含凭证或fragment", e);
     }
   }
 
@@ -118,7 +129,9 @@ public final class AgentSettings {
 
   private static String url(Environment env, String name, String fallback) {
     String value = value(env, name, fallback).strip();
-    if (!value.isEmpty()) httpUri(value);
+    if (!value.isEmpty()) {
+      httpUri(value);
+    }
     return value;
   }
 
@@ -134,11 +147,12 @@ public final class AgentSettings {
       Environment env, String name, double fallback, double min, double max) {
     try {
       double value = Double.parseDouble(value(env, name, Double.toString(fallback)));
-      if (!Double.isFinite(value) || value < min || value > max)
+      if (!Double.isFinite(value) || value < min || value > max) {
         throw new IllegalArgumentException();
+      }
       return value;
     } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException("配置范围错误：" + name);
+      throw new IllegalArgumentException("配置范围错误：" + name, e);
     }
   }
 
@@ -148,7 +162,9 @@ public final class AgentSettings {
 
   private static int integer(Environment env, String name, int fallback, int min, int max) {
     double value = number(env, name, fallback, min, max);
-    if (value != Math.floor(value)) throw new IllegalArgumentException("配置必须为整数：" + name);
+    if (value != Math.floor(value)) {
+      throw new IllegalArgumentException("配置必须为整数：" + name);
+    }
     return (int) value;
   }
 
@@ -159,15 +175,20 @@ public final class AgentSettings {
 
   private static Integer optionalPositiveInteger(Environment env, String name, int fallback) {
     String raw = env.getProperty(name);
-    if (raw == null) return fallback;
+    if (raw == null) {
+      return fallback;
+    }
     raw = raw.strip();
     // Explicit blank/null omits the field; an absent variable uses our recommended default.
-    if (raw.isEmpty() || raw.equalsIgnoreCase("null")) return null;
+    if (raw.isEmpty() || raw.equalsIgnoreCase("null")) {
+      return null;
+    }
     try {
       int value = Integer.parseInt(raw);
-      if (value > 0) return value;
-    } catch (NumberFormatException ignored) {
-      // Do not include the supplied value in configuration errors.
+      if (value > 0) {
+        return value;
+      }
+    } catch (NumberFormatException ignored) { // Do not include the supplied value in configuration errors.
     }
     throw new IllegalArgumentException("配置必须为正整数、空值或null：" + name);
   }

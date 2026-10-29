@@ -68,7 +68,7 @@ select_java() {
       [[ ! -x "$candidate" ]] || candidates+=("$candidate")
     done
   fi
-  for candidate in "${candidates[@]}"; do
+  for candidate in ${candidates[@]+"${candidates[@]}"}; do
     [[ -x "$candidate" ]] || continue
     version="$("$candidate" -version 2>&1)" || continue
     if [[ "$version" =~ version\ \"21[.\"+-] ]]; then

@@ -20,7 +20,8 @@ final class SseDecoder {
   private final ByteArrayOutputStream line = new ByteArrayOutputStream();
   private final List<String> data = new ArrayList<>();
   private String name = "message";
-  private boolean firstLine = true, afterCr;
+  private boolean firstLine = true;
+  private boolean afterCr;
   private int eventBytes;
 
   static Flux<Event> decode(Flux<? extends DataBuffer> body) {
@@ -43,9 +44,12 @@ final class SseDecoder {
           continue;
         }
         afterCr = value == '\r';
-        if (value == '\r' || value == '\n') acceptLine(events);
-        else {
-          if (++eventBytes > MAX_EVENT_BYTES) throw AgentException.model("模型流式事件过大");
+        if (value == '\r' || value == '\n') {
+          acceptLine(events);
+        } else {
+          if (++eventBytes > MAX_EVENT_BYTES) {
+            throw AgentException.model("模型流式事件过大");
+          }
           line.write(value);
         }
       }
@@ -70,27 +74,35 @@ final class SseDecoder {
     line.reset();
     if (firstLine) {
       firstLine = false;
-      if (text.startsWith("\ufeff")) text = text.substring(1);
+      if (text.startsWith("\ufeff")) {
+        text = text.substring(1);
+      }
     }
     if (text.isEmpty()) {
       emit(events);
       return;
     }
     if (text.startsWith(":")) {
-      eventBytes -= text.getBytes(StandardCharsets.UTF_8).length;
+      // SSE spec: comment lines are part of the event frame and count toward MAX_EVENT_BYTES.
       return;
     }
     int colon = text.indexOf(':');
     String field = colon < 0 ? text : text.substring(0, colon);
     String value = colon < 0 ? "" : text.substring(colon + 1);
-    if (value.startsWith(" ")) value = value.substring(1);
-    if (field.equals("data")) data.add(value);
-    else if (field.equals("event")) name = value;
+    if (value.startsWith(" ")) {
+      value = value.substring(1);
+    }
+    if (field.equals("data")) {
+      data.add(value);
+    } else if (field.equals("event")) {
+      name = value;
+    }
   }
 
   private void emit(List<Event> events) {
-    if (!data.isEmpty() || name.equals("error"))
+    if (!data.isEmpty() || name.equals("error")) {
       events.add(new Event(name, String.join("\n", data)));
+    }
     data.clear();
     name = "message";
     eventBytes = 0;
@@ -98,7 +110,9 @@ final class SseDecoder {
 
   private List<Event> finish() {
     List<Event> events = new ArrayList<>();
-    if (line.size() > 0) acceptLine(events);
+    if (line.size() > 0) {
+      acceptLine(events);
+    }
     emit(events);
     return events;
   }

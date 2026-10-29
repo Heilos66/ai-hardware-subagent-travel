@@ -43,7 +43,10 @@ final class WorkflowDiagnostics {
 
   void retrievalResult(ContextView context, String query, JsonNode rawChunks,
       List<ExternalServices.KnowledgeChunk> chunks, int attempts, String token) {
-    // A token file can rotate independently of startup settings. Keep redaction request-scoped.
+    // The SECRETS set is a ConcurrentHashMap.newKeySet() put into context by WorkflowEvents
+    // (context itself is immutable; this mutable set is the intended accumulator). Tokens read
+    // from a rotating file are added here so later emits (e.g. model_request) redact them too.
+    // TODO: replace with Context.write threading to avoid mutating context-sourced state.
     try {
       context.<Set<String>>getOrEmpty(SECRETS).ifPresent(secrets -> secrets.add(token));
     } catch (RuntimeException ignored) {
@@ -61,8 +64,9 @@ final class WorkflowDiagnostics {
           "content_chars", Json.length(chunk.content()))).toList());
       return fields;
     }, token);
-    if (settings.ragflowLogContent)
+    if (settings.ragflowLogContent) {
       emit(context, "ragflow_content", () -> Map.of("question", query, "chunks", rawChunks), token);
+    }
   }
 
   void retrievalSkipped(ContextView context) {
@@ -98,7 +102,9 @@ final class WorkflowDiagnostics {
       fields.put("provider", config.provider());
       fields.put("stream", true);
       fields.put("body_logged", settings.modelLogRequest);
-      if (settings.modelLogRequest) fields.put("body", body);
+      if (settings.modelLogRequest) {
+        fields.put("body", body);
+      }
       return fields;
     }, config.token());
   }
@@ -136,23 +142,29 @@ final class WorkflowDiagnostics {
   private void emit(ContextView context, String event, Supplier<Map<String, Object>> data,
       String... extraSecrets) {
     try {
-      if (!LOG.isInfoEnabled()) return;
+      if (!LOG.isInfoEnabled()) {
+        return;
+      }
       List<String> secrets = new ArrayList<>();
-      for (String value : List.of(settings.classifierKey, settings.ragflow.token()))
+      for (String value : List.of(settings.classifierKey, settings.ragflow.token())) {
         addSecret(secrets, value);
-      for (String value : extraSecrets) addSecret(secrets, value);
+      }
+      for (String value : extraSecrets) {
+        addSecret(secrets, value);
+      }
       context.<Set<String>>getOrEmpty(SECRETS)
           .ifPresent(values -> values.forEach(value -> addSecret(secrets, value)));
       String json = Json.write(redact(Json.MAPPER.valueToTree(data.get()), secrets));
       int chars = Json.length(json);
       boolean truncated = chars > settings.diagnosticLogMaxChars;
       // Keep each log line valid JSON even when the body preview is truncated.
-      if (truncated) json = Json.write(Map.of(
-          "original_chars", chars, "preview", Json.prefix(json, settings.diagnosticLogMaxChars)));
+      if (truncated) {
+        json = Json.write(Map.of(
+            "original_chars", chars, "preview", Json.prefix(json, settings.diagnosticLogMaxChars)));
+      }
       LOG.info("workflow_diagnostic execution_id={} event={} truncated={} data={}",
           context.getOrDefault(EXECUTION_ID, "none"), event, truncated, json);
-    } catch (RuntimeException ignored) {
-      // Serialization, redaction and appender failures must not change requests or SSE results.
+    } catch (RuntimeException ignored) { // Serialization, redaction and appender failures must not change requests or SSE results.
     }
   }
 
@@ -160,8 +172,9 @@ final class WorkflowDiagnostics {
     value = value.strip();
     if (!value.isEmpty()) {
       secrets.add(value);
-      if (value.toLowerCase(Locale.ROOT).startsWith("bearer "))
+      if (value.toLowerCase(Locale.ROOT).startsWith("bearer ")) {
         secrets.add(value.substring(7).strip());
+      }
     }
   }
 
@@ -170,10 +183,13 @@ final class WorkflowDiagnostics {
       ObjectNode result = Json.MAPPER.createObjectNode();
       node.properties().forEach(field -> {
         String key = field.getKey().toLowerCase(Locale.ROOT).replace("_", "").replace("-", "");
-        if (SECRET_KEYS.contains(key)) result.put(field.getKey(), "<REDACTED>");
-        else if (Set.of("imageurl", "imagebase64").contains(key))
+        if (SECRET_KEYS.contains(key)) {
+          result.put(field.getKey(), "<REDACTED>");
+        } else if (Set.of("imageurl", "imagebase64").contains(key)) {
           result.put(field.getKey(), "<IMAGE_OMITTED>");
-        else result.set(field.getKey(), redact(field.getValue(), secrets));
+        } else {
+          result.set(field.getKey(), redact(field.getValue(), secrets));
+        }
       });
       return result;
     }
@@ -184,8 +200,12 @@ final class WorkflowDiagnostics {
     }
     if (node.isTextual()) {
       String value = node.asText();
-      if (value.startsWith("data:image/")) return TextNode.valueOf("<IMAGE_OMITTED>");
-      for (String secret : secrets) value = value.replace(secret, "<REDACTED>");
+      if (value.startsWith("data:image/")) {
+        return TextNode.valueOf("<IMAGE_OMITTED>");
+      }
+      for (String secret : secrets) {
+        value = value.replace(secret, "<REDACTED>");
+      }
       return TextNode.valueOf(value);
     }
     return node;

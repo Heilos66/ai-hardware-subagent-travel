@@ -31,7 +31,9 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   record Diagnostic(String executionId, String event, boolean truncated, JsonNode data) {}
 
   private final List<String> logs = new CopyOnWriteArrayList<>();
-  private final Logger logger = (Logger) LoggerFactory.getLogger(WorkflowDiagnostics.class);
+  private static final Pattern DIAGNOSTIC_PATTERN = Pattern.compile(
+      "workflow_diagnostic execution_id=(\\S+) event=(\\S+) truncated=(true|false) data=(.*)");
+  private static final Logger logger = (Logger) LoggerFactory.getLogger(WorkflowDiagnostics.class);
   private Level previousLevel;
   private boolean previousAdditive;
   private AppenderBase<ILoggingEvent> capture;
@@ -65,10 +67,8 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   }
 
   private List<Diagnostic> diagnostics() {
-    var pattern = Pattern.compile(
-        "workflow_diagnostic execution_id=(\\S+) event=(\\S+) truncated=(true|false) data=(.*)");
     return logs.stream().map(line -> {
-      var match = pattern.matcher(line);
+      var match = DIAGNOSTIC_PATTERN.matcher(line);
       assertThat(match.matches()).isTrue();
       return new Diagnostic(match.group(1), match.group(2), Boolean.parseBoolean(match.group(3)),
           Json.parse(match.group(4)));
@@ -227,7 +227,9 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   })
   void classifierFailurePolicyIsExplicit(String scenario, boolean enabled, boolean fallback) {
     handler = r -> {
-      if (!r.uri().equals("/classifier")) return success(r);
+      if (!r.uri().equals("/classifier")) {
+        return success(r);
+      }
       return switch (scenario) {
         case "timeout" -> new Reply(200, "application/json", Flux.never());
         case "business" -> Reply.json(Map.of("code", 500, "message", "private-classifier-error"));
@@ -240,7 +242,7 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     if (List.of("connection", "dns", "tls").contains(scenario)) {
       http = org.springframework.web.reactive.function.client.WebClient.builder()
           .exchangeFunction(request -> {
-            if (request.url().getPath().equals("/classifier"))
+            if (request.url().getPath().equals("/classifier")) {
               return reactor.core.publisher.Mono.error(
                   new org.springframework.web.reactive.function.client.WebClientRequestException(
                       switch (scenario) {
@@ -249,6 +251,7 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
                         default -> new java.net.ConnectException("private-classifier-error");
                       }, request.method(),
                       request.url(), request.headers()));
+            }
             return reactor.core.publisher.Mono.just(
                 org.springframework.web.reactive.function.client.ClientResponse
                     .create(org.springframework.http.HttpStatus.OK)
@@ -264,7 +267,9 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     var events = run(input, cfg);
     assertThat(result(events).path("code").asText().equals("0")).isEqualTo(fallback);
     assertThat(requests).noneMatch(r -> r.uri().contains("retrieval"));
-    if (!fallback) assertThat(requests).noneMatch(r -> r.uri().contains("chat/completions"));
+    if (!fallback) {
+      assertThat(requests).noneMatch(r -> r.uri().contains("chat/completions"));
+    }
     var failure = event("classifier_failed");
     assertThat(failure.executionId()).isEqualTo(executionId(events));
     assertThat(failure.data().path("status").asText()).isEqualTo("service_failed");
@@ -518,8 +523,11 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     var sent = requests.getFirst().body();
     assertThat(logged.path("rerank_enabled").asBoolean()).isEqualTo(sent.has("rerank_id"));
     for (String field : List.of("knn_top_k", "knn_num_candidates", "rerank_candidates_count")) {
-      if (sent.has(field)) assertThat(logged.path(field)).isEqualTo(sent.path(field));
-      else assertThat(logged.path(field).isNull()).isTrue();
+      if (sent.has(field)) {
+        assertThat(logged.path(field)).isEqualTo(sent.path(field));
+      } else {
+        assertThat(logged.path(field).isNull()).isTrue();
+      }
     }
     assertThat(logs.toString()).doesNotContain("private-reranker-name", "search-secret", "classifier-secret");
   }

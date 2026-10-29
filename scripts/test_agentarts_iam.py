@@ -4,6 +4,7 @@
 import argparse
 import http.client
 import importlib
+import io
 import json
 import math
 import os
@@ -78,24 +79,31 @@ def sse_frames(response):
     data = []
     size = 0
     limit = 16 * 1024 * 1024
-    while raw := response.readline(limit + 1):
-        size += len(raw)
-        if size > limit:
-            raise ValueError("SSE event too large")
-        line = raw.decode("utf-8")
-        print(line, end="", flush=True)
-        line = line.rstrip("\r\n")
-        if not line:
-            if data:
-                frame = json.loads("\n".join(data))
-                if not isinstance(frame, dict):
-                    raise ValueError("SSE data must be an object")
-                yield frame
-            data, size = [], 0
-        elif line.startswith("data:"):
-            data.append(line[5:].removeprefix(" "))
-    if data:
-        raise ValueError("SSE event truncated")
+    # io.TextIOWrapper buffers and decodes at UTF-8 character boundaries, so a readline that
+    # splits a multi-byte sequence no longer raises UnicodeDecodeError. Track bytes via
+    # len(raw.encode("utf-8")) to preserve the original size-limit semantics.
+    text_stream = io.TextIOWrapper(response, encoding="utf-8")
+    try:
+        while raw := text_stream.readline(limit + 1):
+            size += len(raw.encode("utf-8"))
+            if size > limit:
+                raise ValueError("SSE event too large")
+            print(raw, end="", flush=True)
+            line = raw.rstrip("\r\n")
+            if not line:
+                if data:
+                    frame = json.loads("\n".join(data))
+                    if not isinstance(frame, dict):
+                        raise ValueError("SSE data must be an object")
+                    yield frame
+                data, size = [], 0
+            elif line.startswith("data:"):
+                data.append(line[5:].removeprefix(" "))
+        if data:
+            raise ValueError("SSE event truncated")
+    finally:
+        # detach so closing the wrapper does not close the underlying HTTPResponse owned by caller.
+        text_stream.detach()
 
 
 def consume_sse(response, operation):

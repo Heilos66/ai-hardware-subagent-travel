@@ -90,9 +90,10 @@ class WorkflowIntegrationTest extends AgentTestSupport {
       assertThat(requests.get(1).body().path("dataset_ids").get(0).asText()).isEqualTo("travel-kb");
       assertThat(requests.get(1).body().path("question").asText()).isEqualTo("检索关于兵马俑的文档");
       assertThat(content.asText()).contains("これはなんですか？", "兵马俑");
-    } else
+    } else {
       assertThat(content.get(1).path("image_url").path("url").asText())
           .isEqualTo("https://image.test/first.JPG");
+    }
   }
 
   @Test
@@ -124,9 +125,13 @@ class WorkflowIntegrationTest extends AgentTestSupport {
                 Map.of("type", "enabled"),
                 "chat_template_kwargs",
                 Map.of("thinking", true)));
-    for (String type : List.of("text", "text_vision"))
-      for (String provider : List.of("openai-compatible", "convaigateway"))
-        for (Map<String, Object> option : options) result.add(Arguments.of(type, provider, option));
+    for (String type : List.of("text", "text_vision")) {
+      for (String provider : List.of("openai-compatible", "convaigateway")) {
+        for (Map<String, Object> option : options) {
+          result.add(Arguments.of(type, provider, option));
+        }
+      }
+    }
     return result.stream();
   }
 
@@ -136,8 +141,9 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     var model = model(type);
     model.put("provider", provider);
     model.putAll(options);
-    if (!provider.equals("openai-compatible"))
+    if (!provider.equals("openai-compatible")) {
       model.put("endpoint", base + "/proxy?endpoint=Latest");
+    }
     var input = input();
     input.put("model_config", List.of(model));
     if (type.equals("text_vision")) {
@@ -159,15 +165,17 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     assertThat(body.path("stream").asBoolean()).isTrue();
     for (String field : List.of("thinking", "chat_template_kwargs")) {
       Object option = options.get(field);
-      if (option == null) assertThat(body.has(field)).isFalse();
-      else
+      if (option == null) {
+        assertThat(body.has(field)).isFalse();
+      } else {
         assertThat(body.get(field))
             .isEqualTo(
                 option instanceof String value
                     ? Json.parse(value)
                     : Json.MAPPER.valueToTree(option));
+      }
     }
-    if (type.equals("text_vision"))
+    if (type.equals("text_vision")) {
       assertThat(
               body.path("messages")
                   .get(1)
@@ -177,6 +185,7 @@ class WorkflowIntegrationTest extends AgentTestSupport {
                   .path("url")
                   .asText())
           .isEqualTo("data:image/jpeg;base64,/9j/++8=");
+    }
   }
 
   @ParameterizedTest

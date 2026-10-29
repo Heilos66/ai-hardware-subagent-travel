@@ -30,21 +30,30 @@ record Inputs(
       List<String> encoded = strings(raw, "image_base64");
       List<ModelConfig> configs = new ArrayList<>();
       JsonNode models = raw.path("model_config");
-      if (!models.isMissingNode() && !models.isArray()) throw AgentException.badInput();
+      if (!models.isMissingNode() && !models.isArray()) {
+        throw AgentException.badInput();
+      }
       for (JsonNode model : models) {
-        if (!model.isObject()) throw AgentException.badInput();
+        if (!model.isObject()) {
+          throw AgentException.badInput();
+        }
         String type = string(model, "type", null);
-        if (!List.of("text", "text_vision").contains(type)) throw AgentException.badInput();
+        if (!List.of("text", "text_vision").contains(type)) {
+          throw AgentException.badInput();
+        }
         String provider = required(model, "provider");
         String name = required(model, "model_name");
         String token = required(model, "auth_token");
-        if (token.contains("\r") || token.contains("\n")) throw AgentException.badInput();
         JsonNode temp = model.path("temperature");
         double temperature = .1;
         if (!temp.isMissingNode()) {
-          if (!temp.isNumber() && !temp.isTextual()) throw AgentException.badInput();
+          if (!temp.isNumber() && !temp.isTextual()) {
+            throw AgentException.badInput();
+          }
           temperature = Double.parseDouble(temp.asText());
-          if (!Double.isFinite(temperature)) throw AgentException.badInput();
+          if (!Double.isFinite(temperature)) {
+            throw AgentException.badInput();
+          }
         }
         configs.add(
             new ModelConfig(
@@ -72,36 +81,55 @@ record Inputs(
 
   private static String string(JsonNode node, String key, String fallback) {
     JsonNode value = node.get(key);
-    if (value == null && fallback != null) return fallback;
-    if (value == null || !value.isTextual()) throw AgentException.badInput();
+    if (value == null && fallback != null) {
+      return fallback;
+    }
+    if (value == null || !value.isTextual()) {
+      throw AgentException.badInput();
+    }
     return value.asText();
   }
 
   private static String required(JsonNode node, String key) {
     String value = string(node, key, null);
-    if (value.isBlank()) throw AgentException.badInput();
-    // Reject newline-bearing credentials before trimming.
-    if (key.equals("auth_token") && (value.contains("\r") || value.contains("\n")))
+    if (value.isBlank()) {
       throw AgentException.badInput();
+    }
+    // Reject newline-bearing credentials before trimming.
+    if (key.equals("auth_token") && (value.contains("\r") || value.contains("\n"))) {
+      throw AgentException.badInput();
+    }
     return value.strip();
   }
 
   private static List<String> strings(JsonNode node, String key) {
     JsonNode values = node.get(key);
-    if (values == null) return List.of();
-    if (!values.isArray()) throw AgentException.badInput();
+    if (values == null) {
+      return List.of();
+    }
+    if (!values.isArray()) {
+      throw AgentException.badInput();
+    }
     List<String> result = new ArrayList<>();
     for (JsonNode value : values) {
-      if (!value.isTextual()) throw AgentException.badInput();
+      if (!value.isTextual()) {
+        throw AgentException.badInput();
+      }
       result.add(value.asText());
     }
     return List.copyOf(result);
   }
 
   private static Map<String, Object> options(JsonNode value) {
-    if (value == null || value.isNull()) return null;
-    if (value.isTextual()) value = Json.parse(value.asText());
-    if (value == null || !value.isObject()) throw AgentException.badInput();
+    if (value == null || value.isNull()) {
+      return null;
+    }
+    if (value.isTextual()) {
+      value = Json.parse(value.asText());
+    }
+    if (value == null || !value.isObject()) {
+      throw AgentException.badInput();
+    }
     return Json.object(value);
   }
 }

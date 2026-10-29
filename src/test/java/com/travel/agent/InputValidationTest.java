@@ -163,11 +163,16 @@ class InputValidationTest extends AgentTestSupport {
   }
 
   @Test
-  void missingClassifierKeyAndSearchConfigDoNotCallNetwork() {
+  void missingClassifierKeyDoesNotCallNetwork() {
     var raw = input();
     raw.put("image_url", List.of("https://image.test/a.jpg"));
     assertThat(result(run(raw, settings(Map.of("CLASSIFIER_API_KEY", "")))).path("code").asText())
         .isEqualTo("E5004");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void missingDatasetIdDoesNotCallNetwork() {
     assertThat(
             result(run(input(), settings(Map.of("RAGFLOW_DATASET_ID", ""))))
                 .path("code")

@@ -99,7 +99,9 @@ class RagFlowIntegrationTest extends AgentTestSupport {
       assertThat(requests.get(1).body().path("rerank_candidates_count").asInt()).isEqualTo(32);
       assertThat(requests.getLast().body().path("messages").get(1).path("content").asText())
           .contains("兵马俑于1974年发现。", "图片识别候选名称：兵马俑");
-    } else assertThat(requests).noneMatch(r -> r.uri().contains("retrieval"));
+    } else {
+      assertThat(requests).noneMatch(r -> r.uri().contains("retrieval"));
+    }
   }
 
   @Test
@@ -115,29 +117,62 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     assertThat(requests.getFirst().body().has("keyword")).isFalse();
   }
 
-  @ParameterizedTest
-  @CsvSource({"false,0.7,text,1", "true,0.7,text,2", "true,0.69999,text_vision,2"})
-  void disabledRetrievalKeepsRoutesAndStreamingWithoutReadingTokenFile(
-      boolean image, String confidence, String model, int calls, @TempDir Path directory) {
-    handler = r -> r.uri().equals("/classifier") ? classification(confidence) : retrievalOrDefault(r);
+  @Test
+  void disabledRetrievalWithoutImageRoutesToTextModel(@TempDir Path directory) {
+    handler = r -> retrievalOrDefault(r);
     var input = input();
-    if (image) input.put("image_url", List.of("https://image.test/exhibit.jpg"));
     var config = ragflow(Map.of("RAGFLOW_ENABLED", "false", "RAGFLOW_API_TOKEN", "",
         "RAGFLOW_API_TOKEN_FILE", directory.resolve("missing-token").toString()));
     var events = run(input, config);
     assertThat(result(events).path("code").asText()).isEqualTo("0");
-    assertThat(requests).hasSize(calls).noneMatch(r -> r.uri().contains("retrieval"));
-    if (image) assertThat(requests.getFirst().uri()).isEqualTo("/classifier");
+    assertThat(requests).hasSize(1).noneMatch(r -> r.uri().contains("retrieval"));
     var request = requests.getLast();
-    assertThat(request.uri()).startsWith("/" + model + "/");
+    assertThat(request.uri()).startsWith("/text/");
     assertThat(request.body().path("stream").asBoolean()).isTrue();
-    var content = request.body().path("messages").get(1).path("content");
-    if (model.equals("text")) {
-      assertThat(content.asText()).contains("当前没有可用的内部资料", "介绍这个展品")
-          .doesNotContain("1974", "资料 1：");
-      if (image) assertThat(content.asText()).contains("图片识别候选名称：兵马俑");
-    } else assertThat(content.get(1).path("image_url").path("url").asText())
-        .isEqualTo("https://image.test/exhibit.jpg");
+    assertThat(request.body().path("messages").get(1).path("content").asText())
+        .contains("当前没有可用的内部资料", "介绍这个展品")
+        .doesNotContain("1974", "资料 1：");
+    assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
+        .containsExactly("", "这是", "秦代陶俑。");
+  }
+
+  @Test
+  void disabledRetrievalWithImageRoutesToTextModel(@TempDir Path directory) {
+    handler = r -> r.uri().equals("/classifier") ? classification("0.7") : retrievalOrDefault(r);
+    var input = input();
+    input.put("image_url", List.of("https://image.test/exhibit.jpg"));
+    var config = ragflow(Map.of("RAGFLOW_ENABLED", "false", "RAGFLOW_API_TOKEN", "",
+        "RAGFLOW_API_TOKEN_FILE", directory.resolve("missing-token").toString()));
+    var events = run(input, config);
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    assertThat(requests).hasSize(2).noneMatch(r -> r.uri().contains("retrieval"));
+    assertThat(requests.getFirst().uri()).isEqualTo("/classifier");
+    var request = requests.getLast();
+    assertThat(request.uri()).startsWith("/text/");
+    assertThat(request.body().path("stream").asBoolean()).isTrue();
+    assertThat(request.body().path("messages").get(1).path("content").asText())
+        .contains("当前没有可用的内部资料", "介绍这个展品", "图片识别候选名称：兵马俑")
+        .doesNotContain("1974", "资料 1：");
+    assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
+        .containsExactly("", "这是", "秦代陶俑。");
+  }
+
+  @Test
+  void disabledRetrievalWithImageRoutesToVisionModel(@TempDir Path directory) {
+    handler = r -> r.uri().equals("/classifier") ? classification("0.69999") : retrievalOrDefault(r);
+    var input = input();
+    input.put("image_url", List.of("https://image.test/exhibit.jpg"));
+    var config = ragflow(Map.of("RAGFLOW_ENABLED", "false", "RAGFLOW_API_TOKEN", "",
+        "RAGFLOW_API_TOKEN_FILE", directory.resolve("missing-token").toString()));
+    var events = run(input, config);
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    assertThat(requests).hasSize(2).noneMatch(r -> r.uri().contains("retrieval"));
+    assertThat(requests.getFirst().uri()).isEqualTo("/classifier");
+    var request = requests.getLast();
+    assertThat(request.uri()).startsWith("/text_vision/");
+    assertThat(request.body().path("stream").asBoolean()).isTrue();
+    assertThat(request.body().path("messages").get(1).path("content").get(1)
+        .path("image_url").path("url").asText()).isEqualTo("https://image.test/exhibit.jpg");
     assertThat(messages(events).stream().map(m -> m.path("text").asText()).toList())
         .containsExactly("", "这是", "秦代陶俑。");
   }
@@ -334,8 +369,11 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     var body = requests.getFirst().body();
     assertThat(body.has(field)).isFalse();
     assertThat(body.has("rerank_id")).isTrue();
-    for (String other : List.of("knn_top_k", "knn_num_candidates", "rerank_candidates_count"))
-      if (!other.equals(field)) assertThat(body.path(other).isIntegralNumber()).isTrue();
+    for (String other : List.of("knn_top_k", "knn_num_candidates", "rerank_candidates_count")) {
+      if (!other.equals(field)) {
+        assertThat(body.path(other).isIntegralNumber()).isTrue();
+      }
+    }
   }
 
   @Test
@@ -352,14 +390,18 @@ class RagFlowIntegrationTest extends AgentTestSupport {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"0", "-1", "1.5", "NaN", "2147483648", "private-invalid-value"})
-  void invalidCandidateCountsFailBeforeRequestsWithoutEchoingValues(String value) {
-    for (String variable : List.of("RAGFLOW_KNN_TOP_K", "RAGFLOW_KNN_NUM_CANDIDATES",
-        "RAGFLOW_RERANK_CANDIDATES_COUNT")) {
-      assertThatThrownBy(() -> ragflow(Map.of(variable, value)))
-          .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(variable)
-          .hasMessageNotContaining(value);
-    }
+  @CsvSource({
+    "RAGFLOW_KNN_TOP_K,0", "RAGFLOW_KNN_TOP_K,-1", "RAGFLOW_KNN_TOP_K,1.5",
+    "RAGFLOW_KNN_TOP_K,NaN", "RAGFLOW_KNN_TOP_K,2147483648", "RAGFLOW_KNN_TOP_K,private-invalid-value",
+    "RAGFLOW_KNN_NUM_CANDIDATES,0", "RAGFLOW_KNN_NUM_CANDIDATES,-1", "RAGFLOW_KNN_NUM_CANDIDATES,1.5",
+    "RAGFLOW_KNN_NUM_CANDIDATES,NaN", "RAGFLOW_KNN_NUM_CANDIDATES,2147483648", "RAGFLOW_KNN_NUM_CANDIDATES,private-invalid-value",
+    "RAGFLOW_RERANK_CANDIDATES_COUNT,0", "RAGFLOW_RERANK_CANDIDATES_COUNT,-1", "RAGFLOW_RERANK_CANDIDATES_COUNT,1.5",
+    "RAGFLOW_RERANK_CANDIDATES_COUNT,NaN", "RAGFLOW_RERANK_CANDIDATES_COUNT,2147483648", "RAGFLOW_RERANK_CANDIDATES_COUNT,private-invalid-value"
+  })
+  void invalidCandidateCountsFailBeforeRequestsWithoutEchoingValues(String variable, String value) {
+    assertThatThrownBy(() -> ragflow(Map.of(variable, value)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(variable)
+        .hasMessageNotContaining(value);
     assertThat(requests).isEmpty();
   }
 

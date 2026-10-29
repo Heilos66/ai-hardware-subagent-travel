@@ -37,7 +37,9 @@ final class AgentController {
             .split(";", 2)[0]
             .strip()
             .toLowerCase(Locale.ROOT)
-            .equals("application/json")) return error(exchange, 415, "需要application/json");
+            .equals("application/json")) {
+      return error(exchange, 415, "需要application/json");
+    }
     return DataBufferUtils.join(exchange.getRequest().getBody(), settings.maxRequestBytes)
         .map(
             buffer -> {
@@ -55,8 +57,9 @@ final class AgentController {
               JsonNode payload;
               try {
                 payload = Json.parse(bytes);
-                if (payload == null || payload.isMissingNode())
+                if (payload == null || payload.isMissingNode()) {
                   throw new IllegalArgumentException();
+                }
               } catch (RuntimeException e) {
                 return error(exchange, 400, "请求体不是有效JSON");
               }
@@ -82,7 +85,7 @@ final class AgentController {
     response.setStatusCode(HttpStatusCode.valueOf(status));
     response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
     byte[] body =
-        Json.write(Map.of("code", "400", "message", message)).getBytes(StandardCharsets.UTF_8);
+        Json.write(Map.of("code", String.valueOf(status), "message", message)).getBytes(StandardCharsets.UTF_8);
     return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
   }
 }

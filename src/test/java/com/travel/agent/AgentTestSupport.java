@@ -80,7 +80,9 @@ abstract class AgentTestSupport {
 
   @AfterEach
   void teardown() {
-    if (server != null) server.disposeNow();
+    if (server != null) {
+      server.disposeNow();
+    }
   }
 
   AgentSettings settings() {
@@ -146,7 +148,9 @@ abstract class AgentTestSupport {
     for (String frame : frames) {
       for (String part : frame.split("\n\n")) {
         int start = part.indexOf("data: ");
-        if (start >= 0) result.add(Json.parse(part.substring(start + 6)));
+        if (start >= 0) {
+          result.add(Json.parse(part.substring(start + 6)));
+        }
       }
     }
     return result;
@@ -185,11 +189,14 @@ abstract class AgentTestSupport {
   static final String DONE = "data: [DONE]\n\n";
 
   Reply success(Captured request) {
-    if (request.uri.startsWith("/api/v1/retrieval"))
+    if (request.uri.startsWith("/api/v1/retrieval")) {
       return Reply.json(
           Map.of("code", 0, "data", Map.of("chunks",
               List.of(Map.of("content", "秦代陶俑", "document_keyword", "陶俑", "similarity", .88)))));
-    if (request.uri.startsWith("/classifier")) return classification("70%");
+    }
+    if (request.uri.startsWith("/classifier")) {
+      return classification("70%");
+    }
     return Reply.sse(delta("", "思考") + delta("这是", "") + delta("秦代陶俑。", "") + DONE);
   }
 

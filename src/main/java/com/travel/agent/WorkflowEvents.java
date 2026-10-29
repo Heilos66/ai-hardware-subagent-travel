@@ -36,9 +36,9 @@ final class WorkflowEvents {
                           state.timing.finishStage("succeeded");
                         } else {
                           state.index++;
-                          if (step instanceof TravelAgent.Delta delta)
+                          if (step instanceof TravelAgent.Delta delta) {
                             sink.next(message(delta.text(), delta.reasoning(), state.index));
-                          else if (step instanceof TravelAgent.Stage stage) {
+                          } else if (step instanceof TravelAgent.Stage stage) {
                             state.timing.startStage(stage.id());
                             Map<String, Object> data = new LinkedHashMap<>();
                             data.put("agent_id", settings.workflowId);
@@ -60,8 +60,9 @@ final class WorkflowEvents {
                       error -> {
                         state.failed = true;
                         state.timing.finishStage("failed");
-                        if (error instanceof AgentException known) state.result = known.result();
-                        else {
+                        if (error instanceof AgentException known) {
+                          state.result = known.result();
+                        } else {
                           // Never log exception text, URLs, prompts, or stack traces with
                           // credentials.
                           LOG.error(
@@ -156,7 +157,9 @@ final class WorkflowEvents {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("event", name);
     body.put("createdTime", System.currentTimeMillis());
-    if (data != null) body.put("data", data);
+    if (data != null) {
+      body.put("data", data);
+    }
     return "event: " + name + "\ndata: " + Json.write(body) + "\n\n";
   }
 

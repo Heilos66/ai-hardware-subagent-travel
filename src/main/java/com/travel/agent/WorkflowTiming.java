@@ -23,7 +23,9 @@ final class WorkflowTiming {
   }
 
   synchronized void startStage(String next) {
-    if (finished) return;
+    if (finished) {
+      return;
+    }
     long now = System.nanoTime();
     finishStage("succeeded", now);
     stage = next;
@@ -35,7 +37,9 @@ final class WorkflowTiming {
   }
 
   private void finishStage(String status, long now) {
-    if (stage == null) return;
+    if (stage == null) {
+      return;
+    }
     String current = stage;
     stage = null;
     long elapsed = now - stageStarted;
@@ -45,7 +49,9 @@ final class WorkflowTiming {
 
   synchronized void firstToken(boolean hasContent, boolean hasReasoning, String responseMode) {
     if (finished || firstTokenReceived || !"model".equals(stage)
-        || (!hasContent && !hasReasoning)) return;
+        || (!hasContent && !hasReasoning)) {
+      return;
+    }
     long now = System.nanoTime();
     firstTokenReceived = true;
     long validate = completedNanos.getOrDefault("validate", 0L);
@@ -66,13 +72,14 @@ final class WorkflowTiming {
           executionId, millis(ttft), millis(validate), millis(classify), millis(searchText),
           millis(searchImage), millis(modelFirst), millis(sum), millis(ttft - sum), type,
           responseMode, searchMode);
-    } catch (RuntimeException ignored) {
-      // A failed TTFT log must not consume a token or interrupt the model stream.
+    } catch (RuntimeException ignored) { // A failed TTFT log must not consume a token or interrupt the model stream.
     }
   }
 
   synchronized void finish(String status) {
-    if (finished) return;
+    if (finished) {
+      return;
+    }
     long now = System.nanoTime();
     finished = true;
     finishStage(status, now);
@@ -92,8 +99,7 @@ final class WorkflowTiming {
           status,
           millis(elapsedNanos),
           searchMode);
-    } catch (RuntimeException ignored) {
-      // Instrumentation failures must not change SSE results or upstream cancellation.
+    } catch (RuntimeException ignored) { // Instrumentation failures must not change SSE results or upstream cancellation.
     }
   }
 }

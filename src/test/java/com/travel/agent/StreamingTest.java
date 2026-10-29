@@ -247,7 +247,9 @@ class StreamingTest extends AgentTestSupport {
             events(settings).stream(payload(input()))
                 .doOnNext(
                     frame -> {
-                      if (frame.contains("第一段")) first.set(true);
+                      if (frame.contains("第一段")) {
+                        first.set(true);
+                      }
                     })
                 .filter(frame -> first.get() && frame.startsWith(":")))
         .expectNext(": keep-alive\n\n")
@@ -286,7 +288,7 @@ class StreamingTest extends AgentTestSupport {
   }
 
   @Test
-  void roleUsageFramesIgnoredAndContentFilterFails() {
+  void roleUsageFramesIgnored() {
     handler =
         r ->
             r.uri().startsWith("/api/v1/retrieval")
@@ -297,6 +299,10 @@ class StreamingTest extends AgentTestSupport {
                         + "data: {\"choices\":[],\"usage\":{}}\n\n"
                         + DONE);
     assertThat(result(run(input())).path("code").asText()).isEqualTo("0");
+  }
+
+  @Test
+  void contentFilterFails() {
     handler =
         r ->
             r.uri().startsWith("/api/v1/retrieval")

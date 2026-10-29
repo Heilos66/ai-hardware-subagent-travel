@@ -8,6 +8,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLException;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.http.HttpHeaders;
@@ -15,8 +16,14 @@ import org.springframework.http.HttpHeaders;
 /** Request-local diagnostics; never retain upstream bodies, URLs or exception messages. */
 final class ModelFailureDetails {
   private volatile Integer status;
-  private volatile String contentType, requestId, retryAfter, finishReason;
-  private volatile boolean tokenReceived, textReceived;
+  private volatile String contentType;
+  private volatile String requestId;
+  private volatile String retryAfter;
+  private volatile String finishReason;
+
+  // AtomicBoolean ensures atomic read-modify-write for flag updates.
+  private final AtomicBoolean tokenReceived = new AtomicBoolean();
+  private final AtomicBoolean textReceived = new AtomicBoolean();
 
   void response(int status, HttpHeaders headers) {
     this.status = status;
@@ -39,9 +46,11 @@ final class ModelFailureDetails {
   void token(ChatResponse part) {
     var output = part.getResult().getOutput();
     boolean text = output.getText() != null && !output.getText().isEmpty();
-    textReceived |= text;
-    tokenReceived |= text || !((String) output.getMetadata()
+    boolean hasReasoning = !((String) output.getMetadata()
         .getOrDefault(CompatibleChatModel.REASONING_DELTA, "")).isEmpty();
+    // Atomic |= : set to true only if not already true; equivalent to |= but thread-safe.
+    textReceived.compareAndSet(false, text);
+    tokenReceived.compareAndSet(false, text || hasReasoning);
   }
 
   Map<String, Object> fields(Throwable error) {
@@ -56,12 +65,18 @@ final class ModelFailureDetails {
     if (kind == null) {
       for (Throwable cause : causes) {
         String name = cause.getClass().getSimpleName();
-        if (cause instanceof UnknownHostException) { kind = "dns_error"; break; }
-        if (name.equals("ConnectTimeoutException")) { kind = "connect_timeout"; break; }
+        if (cause instanceof UnknownHostException) {
+          kind = "dns_error"; break;
+        }
+        if (name.equals("ConnectTimeoutException")) {
+          kind = "connect_timeout"; break;
+        }
         if (cause instanceof SSLException || name.contains("SslHandshake")) {
           kind = "tls_error"; break;
         }
-        if (cause instanceof ConnectException) { kind = "connect_error"; break; }
+        if (cause instanceof ConnectException) {
+          kind = "connect_error"; break;
+        }
         if (cause instanceof TimeoutException || name.equals("ReadTimeoutException")) {
           kind = "timeout"; break;
         }
@@ -81,8 +96,12 @@ final class ModelFailureDetails {
     }
     if (kind == null && causes.stream().anyMatch(c ->
         c instanceof com.fasterxml.jackson.core.JacksonException
-            || c instanceof IllegalArgumentException)) kind = "invalid_response";
-    if (kind == null) kind = status == null ? "request_error" : "response_error";
+            || c instanceof IllegalArgumentException)) {
+      kind = "invalid_response";
+    }
+    if (kind == null) {
+      kind = status == null ? "request_error" : "response_error";
+    }
     Map<String, Object> fields = new LinkedHashMap<>();
     fields.put("http_status", status);
     fields.put("content_type", contentType);
@@ -91,8 +110,8 @@ final class ModelFailureDetails {
     fields.put("phase", status == null ? "request" : "response");
     fields.put("response_mode", contentType == null ? "unknown"
         : contentType.toLowerCase(java.util.Locale.ROOT).startsWith("text/event-stream") ? "sse" : "json_or_other");
-    fields.put("token_received", tokenReceived);
-    fields.put("text_received", textReceived);
+    fields.put("token_received", tokenReceived.get());
+    fields.put("text_received", textReceived.get());
     fields.put("failure_kind", kind);
     fields.put("finish_reason", finishReason);
     fields.put("error_type", error.getClass().getSimpleName());

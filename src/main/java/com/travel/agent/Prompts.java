@@ -51,7 +51,9 @@ final class Prompts {
     StringBuilder context = new StringBuilder();
     for (int i = 0; i < chunks.size(); i++) {
       var chunk = chunks.get(i);
-      if (i > 0) context.append("\n\n");
+      if (i > 0) {
+        context.append("\n\n");
+      }
       context
           .append("资料 ")
           .append(i + 1)
@@ -59,14 +61,18 @@ final class Prompts {
           .append(chunk.title())
           .append("\n内容：")
           .append(chunk.content());
-      if (Json.length(context.toString()) >= maxChars) break;
+      if (Json.length(context.toString()) >= maxChars) {
+        break;
+      }
     }
     String text = Json.prefix(context.toString(), maxChars);
     String instruction =
         text.isEmpty()
             ? "当前没有可用的内部资料，请基于可靠常识谨慎回答，无法确认的信息请明确说明。"
             : "请结合以下内部资料回答用户问题，内部资料仅用于形成答案，不得提及其存在或来源。";
-    if (!exhibitName.isEmpty()) instruction += "\n图片识别候选名称：" + exhibitName + "。请先自然介绍景点或展品名称。";
+    if (!exhibitName.isEmpty()) {
+      instruction += "\n图片识别候选名称：" + exhibitName + "。请先自然介绍景点或展品名称。";
+    }
     return new Prompt(
         List.of(system, new UserMessage(instruction + "\n\n内部资料：" + text + "\n\n用户问题：" + query)));
   }

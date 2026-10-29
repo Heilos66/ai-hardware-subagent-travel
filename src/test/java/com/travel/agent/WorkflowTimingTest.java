@@ -28,7 +28,7 @@ import reactor.test.StepVerifier;
 class WorkflowTimingTest extends AgentTestSupport {
   private final List<String> logs = new CopyOnWriteArrayList<>();
   private final List<String> ttftLogs = new CopyOnWriteArrayList<>();
-  private final Logger logger = (Logger) LoggerFactory.getLogger(WorkflowTiming.class);
+  private static final Logger logger = (Logger) LoggerFactory.getLogger(WorkflowTiming.class);
   private Level previousLevel;
   private boolean previousAdditive;
   private AppenderBase<ILoggingEvent> capture;
@@ -97,7 +97,9 @@ class WorkflowTimingTest extends AgentTestSupport {
     };
     var input = input();
     input.put("query", "private-query-42");
-    if (image.equals("image")) input.put("image_url", List.of("https://image.test/private.jpg"));
+    if (image.equals("image")) {
+      input.put("image_url", List.of("https://image.test/private.jpg"));
+    }
     var events = run(input, settings());
     assertThat(result(events).path("code").asText()).isEqualTo("0");
     assertThat(requests).hasSize(calls);
@@ -120,9 +122,9 @@ class WorkflowTimingTest extends AgentTestSupport {
         .allMatch(line -> line.contains("execution_id=" + executionId))
         .allMatch(line -> line.contains("status=succeeded") && line.contains("search_mode=ragflow"));
     var stages = logs.stream().map(line -> field(line, "stage")).toList();
-    if (search.equals("none"))
+    if (search.equals("none")) {
       assertThat(stages).containsExactly("validate", "classify", "model", "total");
-    else {
+    } else {
       assertThat(stages)
           .containsExactlyElementsOf(
               image.equals("image")
@@ -150,10 +152,12 @@ class WorkflowTimingTest extends AgentTestSupport {
     assertThat(field(ttft, "response_mode")).isEqualTo("sse");
     assertTtftComponents(ttft, logs);
     assertThat(milliseconds(ttft, "model_to_first_token_ms")).isGreaterThanOrEqualTo(25);
-    if (!search.equals("none"))
+    if (!search.equals("none")) {
       assertThat(milliseconds(ttft, search + "_ms")).isGreaterThanOrEqualTo(25);
-    if (image.equals("image"))
+    }
+    if (image.equals("image")) {
       assertThat(milliseconds(ttft, "classify_ms")).isGreaterThanOrEqualTo(25);
+    }
     assertThat(ttftLogs.toString()).doesNotContain(
         "private-query-42", "model-secret", "search-secret", "classifier-secret", "https://image.test");
   }
@@ -240,8 +244,10 @@ class WorkflowTimingTest extends AgentTestSupport {
   @ParameterizedTest
   @ValueSource(strings = {"content", "reasoning_content", "content_and_reasoning"})
   void firstRealTokenLogsImmediatelyBeforeStreamCompletes(String type) {
-    Sinks.One<Void> first = Sinks.one(), tail = Sinks.one();
-    AtomicBoolean heartbeatSeen = new AtomicBoolean(), firstSeen = new AtomicBoolean();
+    Sinks.One<Void> first = Sinks.one();
+    Sinks.One<Void> tail = Sinks.one();
+    AtomicBoolean heartbeatSeen = new AtomicBoolean();
+    AtomicBoolean firstSeen = new AtomicBoolean();
     String text = type.equals("reasoning_content") ? "" : "首个正文";
     String reasoning = type.equals("content") ? "" : "首个思考";
     String ignored = ": keep-alive\n\n"
@@ -288,10 +294,13 @@ class WorkflowTimingTest extends AgentTestSupport {
       default -> new Reply(200, "text/event-stream", Flux.never());
     };
     var raw = input();
-    if (scenario.equals("capabilities")) raw.put("operation", "query_capabilities");
+    if (scenario.equals("capabilities")) {
+      raw.put("operation", "query_capabilities");
+    }
     var received = run(raw, settings(Map.of("MODEL_TIMEOUT", "0.1")));
-    if (!scenario.equals("capabilities"))
+    if (!scenario.equals("capabilities")) {
       assertThat(result(received).path("code").asText()).isEqualTo("E5003");
+    }
     awaitTotals(1);
     assertThat(ttftLogs).isEmpty();
   }

@@ -53,7 +53,8 @@ final class CompatibleChatModel implements ChatModel {
         .collectList()
         .map(
             parts -> {
-              StringBuilder text = new StringBuilder(), reasoning = new StringBuilder();
+              StringBuilder text = new StringBuilder();
+              StringBuilder reasoning = new StringBuilder();
               for (ChatResponse part : parts) {
                 text.append(part.getResult().getOutput().getText());
                 reasoning.append(
@@ -73,8 +74,9 @@ final class CompatibleChatModel implements ChatModel {
           long deadline = System.nanoTime() + settings.modelTimeout.toNanos();
           URI endpoint = config.endpoint();
           if (!settings.modelAllowedHosts.isEmpty()
-              && !settings.modelAllowedHosts.contains(endpoint.getHost().toLowerCase(Locale.ROOT)))
+              && !settings.modelAllowedHosts.contains(endpoint.getHost().toLowerCase(Locale.ROOT))) {
             return Flux.error(new AgentException("400", "模型endpoint不在允许的主机列表中"));
+          }
           Map<String, Object> request = new LinkedHashMap<>();
           ChatOptions options =
               prompt.getOptions() == null ? getDefaultOptions() : prompt.getOptions();
@@ -84,9 +86,12 @@ final class CompatibleChatModel implements ChatModel {
               "temperature",
               options.getTemperature() == null ? config.temperature() : options.getTemperature());
           request.put("stream", true);
-          if (config.chatTemplateKwargs() != null)
+          if (config.chatTemplateKwargs() != null) {
             request.put("chat_template_kwargs", config.chatTemplateKwargs());
-          if (config.thinking() != null) request.put("thinking", config.thinking());
+          }
+          if (config.thinking() != null) {
+            request.put("thinking", config.thinking());
+          }
           boolean direct = config.provider().equalsIgnoreCase("openai-compatible");
           Object body = request;
           if (!direct) {
@@ -106,20 +111,22 @@ final class CompatibleChatModel implements ChatModel {
                   .contentType(MediaType.APPLICATION_JSON)
                   .accept(MediaType.TEXT_EVENT_STREAM)
                   .header("User-Agent", "travel-agent/2.0");
-          if (direct)
+          if (direct) {
             call.header(
                 "Authorization",
                 config.token().toLowerCase(Locale.ROOT).startsWith("bearer ")
                     ? config.token()
                     : "Bearer " + config.token());
+          }
           diagnostics.modelRequest(context, config, body);
           return call.bodyValue(body)
               .exchangeToFlux(
                   reply -> {
                     failure.response(reply.statusCode().value(), reply.headers().asHttpHeaders());
-                    if (!reply.statusCode().is2xxSuccessful())
+                    if (!reply.statusCode().is2xxSuccessful()) {
                       return Flux.error(
                           AgentException.model("模型服务返回HTTP " + reply.statusCode().value()));
+                    }
                     MediaType type =
                         reply.headers().contentType().orElse(MediaType.APPLICATION_JSON);
                     boolean streaming = MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type);
@@ -130,11 +137,13 @@ final class CompatibleChatModel implements ChatModel {
                           .takeUntil(event -> event.data().strip().equals("[DONE]"))
                           .concatMap(state::decode, 1)
                           .concatWith(Flux.defer(state::finish));
-                    } else responses = reply
-                        .bodyToMono(byte[].class)
-                        .defaultIfEmpty(new byte[0])
-                        .map(bytes -> normalize(Json.parse(bytes)))
-                        .flux();
+                    } else {
+                      responses = reply
+                          .bodyToMono(byte[].class)
+                          .defaultIfEmpty(new byte[0])
+                          .map(bytes -> normalize(Json.parse(bytes)))
+                          .flux();
+                    }
                     // Observe the first parsed upstream token before Spring AI/SSE forwarding.
                     return responses.doOnNext(part -> {
                       failure.token(part);
@@ -147,8 +156,6 @@ final class CompatibleChatModel implements ChatModel {
                               streaming ? "sse" : "json");
                         });
                     });
-                    // Every timeout uses the same deadline, even when chunks keep arriving.
-                    // timeout() cancels the HTTP publisher before emitting the timeout error.
                   })
               .timeout(
                   Mono.delay(settings.modelTimeout),
@@ -166,10 +173,12 @@ final class CompatibleChatModel implements ChatModel {
   static URI proxyEndpoint(Inputs.ModelConfig config) {
     URI uri = config.endpoint();
     String path = uri.getRawPath().replaceAll("/+$", "");
-    if (path.endsWith("/invocations")) path += "/stream";
-    else if (!path.endsWith("/invocations/stream")) {
-      if (!config.model().matches("[A-Za-z0-9._-]+"))
+    if (path.endsWith("/invocations")) {
+      path += "/stream";
+    } else if (!path.endsWith("/invocations/stream")) {
+      if (!config.model().matches("[A-Za-z0-9._-]+")) {
         throw new AgentException("400", "model_name包含不支持的字符");
+      }
       path += "/runtimes/" + config.model() + "/invocations/stream";
     }
     return URI.create(
@@ -206,24 +215,34 @@ final class CompatibleChatModel implements ChatModel {
   }
 
   static ChatResponse normalize(JsonNode body) {
-    if (body == null || !body.isObject()) throw AgentException.model("模型响应必须是JSON对象");
+    if (body == null || !body.isObject()) {
+      throw AgentException.model("模型响应必须是JSON对象");
+    }
     JsonNode message;
     if (body.has("code")) {
       JsonNode code = body.get("code");
       if (!((code.isNumber() && code.asDouble() == 0)
-          || (code.isTextual() && code.asText().equals("0"))))
+          || (code.isTextual() && code.asText().equals("0")))) {
         throw AgentException.model("模型服务返回业务错误");
+      }
       message = body;
-    } else message = body.path("choices").path(0).path("message");
+    } else {
+      message = body.path("choices").path(0).path("message");
+    }
     JsonNode text = message.path(body.has("code") ? "message" : "content");
-    if (!text.isTextual() || text.asText().isBlank())
+    if (!text.isTextual() || text.asText().isBlank()) {
       throw AgentException.model("模型响应message.content为空或格式错误");
+    }
     return response(text.asText(), optionalText(message.get("reasoning_content")));
   }
 
   private static String optionalText(JsonNode node) {
-    if (node == null || node.isNull()) return "";
-    if (!node.isTextual()) throw AgentException.model("模型流式文本格式错误");
+    if (node == null || node.isNull()) {
+      return "";
+    }
+    if (!node.isTextual()) {
+      throw AgentException.model("模型流式文本格式错误");
+    }
     return node.asText();
   }
 
@@ -233,7 +252,8 @@ final class CompatibleChatModel implements ChatModel {
   }
 
   private static final class StreamState {
-    private boolean completed, hasText;
+    private boolean completed;
+    private boolean hasText;
     private final ModelFailureDetails failure;
     private AgentException terminalError;
 
@@ -249,34 +269,59 @@ final class CompatibleChatModel implements ChatModel {
     }
 
     List<ChatResponse> accept(SseDecoder.Event event) {
-      if (event.name().equals("error")) throw AgentException.model("模型服务返回流式错误");
+      if (event.name().equals("error")) {
+        throw AgentException.model("模型服务返回流式错误");
+      }
       if (event.data().strip().equals("[DONE]")) {
         completed = true;
         return List.of();
       }
-      if (event.data().isBlank()) return List.of();
+      if (event.data().isBlank()) {
+        return List.of();
+      }
       JsonNode chunk = Json.parse(event.data());
-      if (chunk == null || !chunk.isObject()) throw AgentException.model("模型流式数据格式错误");
-      if (chunk.has("error") || chunk.has("code")) throw AgentException.model("模型服务返回流式错误");
+      if (chunk == null || !chunk.isObject()) {
+        throw AgentException.model("模型流式数据格式错误");
+      }
+      if (chunk.has("error") || chunk.has("code")) {
+        throw AgentException.model("模型服务返回流式错误");
+      }
       JsonNode choices = chunk.path("choices");
-      if (choices.isArray() && choices.isEmpty() && chunk.has("usage")) return List.of();
-      if (!choices.isArray() || choices.isEmpty()) throw AgentException.model("模型流式数据缺少choices");
+      if (choices.isArray() && choices.isEmpty() && chunk.has("usage")) {
+        return List.of();
+      }
+      if (!choices.isArray() || choices.isEmpty()) {
+        throw AgentException.model("模型流式数据缺少choices");
+      }
       List<ChatResponse> result = new ArrayList<>();
       for (JsonNode choice : choices) {
-        if (!choice.isObject()) throw AgentException.model("模型流式choice格式错误");
-        if (choice.path("index").asInt(0) != 0) continue;
+        if (!choice.isObject()) {
+          throw AgentException.model("模型流式choice格式错误");
+        }
+        if (choice.path("index").asInt(0) != 0) {
+          continue;
+        }
         JsonNode delta = choice.path("delta");
-        if (!delta.isObject()) throw AgentException.model("模型流式数据缺少delta");
+        if (!delta.isObject()) {
+          throw AgentException.model("模型流式数据缺少delta");
+        }
         JsonNode finish = choice.path("finish_reason");
         String reason = finish.isTextual() ? finish.asText() : "";
-        if (!reason.isEmpty()) failure.finishReason(reason);
-        if (reason.equals("content_filter")) throw AgentException.model("模型回答被内容过滤");
-        String text = optionalText(delta.get("content")),
-            reasoning = optionalText(delta.get("reasoning_content"));
+        if (!reason.isEmpty()) {
+          failure.finishReason(reason);
+        }
+        if (reason.equals("content_filter")) {
+          throw AgentException.model("模型回答被内容过滤");
+        }
+        String text = optionalText(delta.get("content"));
+        String reasoning = optionalText(delta.get("reasoning_content"));
         hasText |= !text.isBlank();
-        if (!text.isEmpty() || !reasoning.isEmpty()) result.add(response(text, reasoning));
-        if (reason.equals("stop")) completed = true;
-        else if (!reason.isEmpty()) {
+        if (!text.isEmpty() || !reasoning.isEmpty()) {
+          result.add(response(text, reasoning));
+        }
+        if (reason.equals("stop")) {
+          completed = true;
+        } else if (!reason.isEmpty()) {
           terminalError = AgentException.model(switch (reason) {
             case "length" -> "回答因长度限制未完整生成";
             case "tool_calls", "function_call" -> "模型请求调用工具，当前流程不支持，回答未完成";
@@ -289,8 +334,12 @@ final class CompatibleChatModel implements ChatModel {
     }
 
     Flux<ChatResponse> finish() {
-      if (!completed) return Flux.error(AgentException.model("模型流式响应中断，未收到结束标记"));
-      if (!hasText) return Flux.error(AgentException.model("模型响应message.content为空"));
+      if (!completed) {
+        return Flux.error(AgentException.model("模型流式响应中断，未收到结束标记"));
+      }
+      if (!hasText) {
+        return Flux.error(AgentException.model("模型响应message.content为空"));
+      }
       return Flux.empty();
     }
   }
