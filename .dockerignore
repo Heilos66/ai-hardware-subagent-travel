@@ -3,6 +3,7 @@
 !pom.xml
 !mvnw
 !.mvn/
+!.mvn/maven.config
 !.mvn/wrapper/
 !.mvn/wrapper/**
 !src/

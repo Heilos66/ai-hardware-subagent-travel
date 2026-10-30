@@ -37,18 +37,27 @@ FuxiCI 的 `compile_java` 共享模板与仓库的 `.cloudbuild/build.yml` 是�
 推荐构建命令：
 
 ```bash
+printf 'build_environment JAVA_HOME=%s\n' "${JAVA_HOME:-<unset>}"
+printf 'build_environment PATH_java=%s\n' "$(command -v java || true)"
+java -version 2>&1 || true
+printf 'build_environment PATH_javac=%s\n' "$(command -v javac || true)"
+javac -version 2>&1 || true
 ./mvnw -B -V -ntp -f pom.xml clean compile -Dmaven.test.skip=true
 ```
 
-若只能使用平台提供的 Maven：
+若只能使用平台提供的 Maven，保留前面的版本诊断命令，将最后一行替换为：
 
 ```bash
 mvn -B -V -f pom.xml clean compile -Dmaven.test.skip=true
 ```
 
-`-V` 输出 Maven 实际使用的 Java 版本与路径。验收时核对这里为 JDK 21，不能只检查终端中另一个 `java -version` 的输出。扫描工具若另行选择 JDK，也需要同步调整。
+工程已在 `.mvn/maven.config` 中设置 `-V`。从工程根目录执行 `mvn` 或 `./mvnw` 时，会在构建开始打印 Maven 版本、Maven 安装目录、实际 Java 版本、厂商和 Java 运行目录；即使直接调用 `compiler:compile`、没有进入 `validate`，也能看到版本。`-V` 打印后继续构建，不是打印后退出的 `-v`。该配置使用 Maven 3.3.1+ 支持的项目级参数，包含当前共享模板的 Maven 3.6.3；镜像构建也会携带此文件。[Maven 项目配置说明](https://maven.apache.org/configure.html)
 
-POM 已通过 Maven Enforcer 在 `validate` 阶段要求 JDK 21 或更高版本；低版本会直接提示 `Travel Agent requires JDK 21 or newer`。该检查明确诊断环境问题，不会自动安装、切换 JDK 或修改平台模板。`compile` 会先执行 `validate` 和资源处理；直接调用 `compiler:compile` 会跳过这些前置阶段，也会跳过这条 JDK 检查。[Maven 生命周期说明](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)、[JDK 版本检查规则](https://maven.apache.org/enforcer/enforcer-rules/requireJavaVersion.html)
+CloudBuild 还会打印 `JAVA_HOME` 和 PATH 中的 `java`、`javac` 路径及版本。FuxiCI 若需要这些额外信息，将上面的完整命令放到**同一个构建步骤**；仓库修改不会替换平台共享模板的命令。诊断命令失败时仍继续运行 Maven，由实际构建检查决定是否失败。
+
+验收时以 Maven 启动输出中的 `Java version` 和 `runtime`（较旧版本显示 `Java home`）为准，核对是否为 JDK 21。PATH 中的 Java 和 `JAVA_HOME` 可能指向不同安装，不能只检查另一个终端中的 `java -version`。扫描器或外部编译器/toolchain 若另行选择 JDK，也需要单独核对。
+
+POM 已通过 Maven Enforcer 在 `validate` 阶段要求 JDK 21 或更高版本，并打印参与校验的规范化 JDK 版本；低版本会直接提示 `Travel Agent requires JDK 21 or newer`，附带实际 JVM 的 `java.runtime.version`、`java.vendor` 和 `java.home`。这些值来自运行 Maven 的 JVM；POM 的 `<java.version>21</java.version>` 只是项目目标版本，不能用它证明实际 JVM 为 21。该检查不会自动安装、切换 JDK 或修改平台模板。`compile` 会先执行 `validate` 和资源处理；直接调用 `compiler:compile` 会跳过这些前置阶段，也会跳过这条 JDK 检查。[Maven 生命周期说明](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)、[JDK 版本检查规则](https://maven.apache.org/enforcer/enforcer-rules/requireJavaVersion.html)
 
 ### 同类错误排查与验收
 
@@ -60,6 +69,8 @@ POM 已通过 Maven Enforcer 在 `validate` 阶段要求 JDK 21 或更高版本�
 无需逐个删除 Spring 注解或将类型改为反射；这些写法不能使 JDK 8 兼容 Spring 6。将 `java.version` 改成 8 也不会降低第三方 JAR 的字节码版本。
 
 本地对照验证（2026-10-30）：JDK 8 复现了上述注解导入错误；新增校验在 Maven 3.6.3 + JDK 8 下于编译前明确拒绝，Maven 3.6.3 + JDK 21 编译全部主源码成功。JDK 21 + Maven Wrapper 的 `clean verify` 通过全部 274 项测试并完成 JAR 打包。提供的临时日志域名在本机无法解析，未读取到平台日志，也未修改共享模板或重新执行 FuxiCI 门禁。
+
+版本输出补充验证（2026-10-30）：不显式传 `-V` 时，Maven 3.9.11 和 3.6.3 均打印实际 JVM 信息，JDK 21.0.12.1 的 `validate` 通过；Maven 3.6.3 + JDK 8u504 按预期失败，错误中正确显示 `java.runtime.version=1.8.0_504-b01` 和实际 Java 目录。直接执行 `compiler:help` 未进入 `validate`，仍能打印版本。此次仅验证构建版本诊断和配置语法，未重新运行业务测试或平台门禁。
 
 ## 本地启动与请求
 

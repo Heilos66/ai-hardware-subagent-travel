@@ -41,7 +41,15 @@ steps:
         # -B 批处理、-V 输出 Maven 实际使用的 JDK、-ntp 不打印 transfer/progress 噪声
         # test 跑单测；测试用 mock WebClient（如 missingClassifierKeyAndSearchConfigDoNotCallNetwork 显式不调网络），不依赖外部服务
         # 想出 jar 改 package；想跑集成测试改 verify
-        command: sh -c 'chmod +x mvnw && ./mvnw -B -V -ntp clean test'
+        command: |
+          sh -c '
+            printf "build_environment JAVA_HOME=%s\n" "${JAVA_HOME:-<unset>}"
+            printf "build_environment PATH_java=%s\n" "$(command -v java || true)"
+            java -version 2>&1 || true
+            printf "build_environment PATH_javac=%s\n" "$(command -v javac || true)"
+            javac -version 2>&1 || true
+            chmod +x mvnw && ./mvnw -B -V -ntp clean test
+          '
 
   # POST_BUILD 暂不配置：本流水线只为 MR 合并门禁，不需要归档 jar。
   # 后续若要持续交付，按 minimal-templates.md §3.1 加：

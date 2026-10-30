@@ -72,7 +72,8 @@
           <rules>
             <requireJavaVersion>
               <version>[21,)</version>
-              <message>Travel Agent requires JDK 21 or newer. Set the CI/shared-template JDK and Maven JAVA_HOME to JDK 21; see docs/verification.md.</message>
+              <display>true</display>
+              <message>Travel Agent requires JDK 21 or newer. Actual Maven JVM: java.runtime.version=${java.runtime.version}, java.vendor=${java.vendor}, java.home=${java.home}. Set the CI/shared-template JDK and Maven JAVA_HOME to JDK 21; see docs/verification.md.</message>
             </requireJavaVersion>
           </rules>
         </configuration>
