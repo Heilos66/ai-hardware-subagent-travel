@@ -37,6 +37,8 @@ Maven 坐标为 `com.travel:travel-agent`。源码、测试和日志类名统一
 
 需要 JDK 21；可通过 `JAVA_HOME` 指定。项目包含 Maven Wrapper，首次构建需要下载 Maven 和依赖，Windows 使用 `mvnw.cmd`。
 
+Maven 在 `validate` 阶段检查 JDK，低于 21 时直接报告环境不兼容。FuxiCI/静态检查共享模板也需要单独选择 JDK 21，并使用 `clean compile`，配置与排查见 [静态检查构建环境](docs/verification.md#静态检查构建环境)。
+
 ```bash
 test -f .env || cp .env.example .env
 # 编辑 .env 中的分类器及 RAGFlow 配置
@@ -91,6 +93,7 @@ java -jar target/travel-agent.jar
 | `CLASSIFIER_TIMEOUT/MODEL_TIMEOUT` | 分类器 / 模型整次调用超时，默认 30/60 秒 |
 | `MODEL_ALLOWED_HOSTS` | 可选的模型目标主机限制，逗号分隔 |
 | `MAX_REQUEST_BYTES/MAX_IMAGE_BYTES/MAX_CONTEXT_CHARS` | 默认 16MiB / 10MiB / 16000 字符 |
+| `MAX_QUERY_CHARS/MAX_RESPONSE_CHARS` | 输入上限默认 10000 个 Unicode 字符；回答提示词上限默认中文/日文 200 字、英文少于 200 词 |
 | `HEARTBEAT_SECONDS` | SSE 心跳间隔，默认 15 秒 |
 
 模型地址、名称、凭据及思考选项由请求中的 model_config 提供，不使用共享的固定模型配置。
@@ -128,11 +131,11 @@ java -jar target/travel-agent.jar
 }
 ```
 
-- 纯文本省略 image_url；图片也支持 image_base64 数组，两者互斥，只处理第一张。支持 JPG/JPEG/PNG；有图片时 query 可为空，否则必填，最多 1000 字符。
+- 纯文本省略 image_url；图片也支持 image_base64 数组，两者互斥，只处理第一张。支持 JPG/JPEG/PNG；有图片时 query 可为空，否则必填，默认最多 10000 个 Unicode 字符（按码点计数），可通过 MAX_QUERY_CHARS 配置，知识检索客户端使用同一上限。
 - operation 缺省、null 或空字符串按 chat_completions 处理。query_capabilities 返回三项能力；create_response/fetch_response 不受支持。
 - openai-compatible 直接调用完整 endpoint，使用 Bearer Token；其他 provider 保留原 temp_token/action/model_request 代理协议及 /invocations/stream 路径。
 - 所有模型请求固定 stream=true。chat_template_kwargs 和 thinking 支持对象或对象的 JSON 字符串，解析后按原字段名透传；未传/null 时省略，空对象保留，两项均传时均保留。
-- 不维护模型会话历史，enable_history=false。最新系统提示词见 [Prompts.java](src/main/java/com/travel/agent/Prompts.java)。
+- 不维护模型会话历史，enable_history=false。系统提示词默认要求中文/日文不超过 200 字、英文少于 200 词，可通过 MAX_RESPONSE_CHARS 配置；由模型遵循提示词，不在流式返回时强制截断。最新系统提示词见 [Prompts.java](src/main/java/com/travel/agent/Prompts.java)。
 
 SSE 顺序为 workflow_started、node_started、message、workflow_finished、end。message.data.text 与 message.data.reasoning_content 都是增量，各自拼接；最终 responseContent 是 JSON 字符串，成功解析为 `{"code":"0","message":"正文"}`，只包含正文。能力查询的 message.text 和最终结果为能力 JSON 字符串，字段为 chat_completions/create_response/fetch_response。
 
@@ -157,7 +160,7 @@ workflow_diagnostic 与耗时日志共用 execution_id，默认记录检索成�
 ## 测试与部署
 
 ```bash
-./mvnw verify                       # 全部 217 项回归
+./mvnw verify                       # 全部回归
 ./scripts/verify_logs.sh test       # 耗时与诊断日志专项测试
 ```
 

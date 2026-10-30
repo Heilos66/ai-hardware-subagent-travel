@@ -48,12 +48,15 @@ class RagFlowIntegrationTest extends AgentTestSupport {
         : success(request);
   }
 
-  @Test
-  void textSearchUsesDocumentContractAndExistingStreamingPrompt() {
+  @ParameterizedTest
+  @ValueSource(ints = {0, 80})
+  void textSearchUsesDocumentContractAndExistingStreamingPrompt(int configuredResponseLimit) {
     handler = this::retrievalOrDefault;
     var input = input();
     input.put("query", "兵马俑是什么时候发现的");
-    var events = run(input, ragflow(Map.of()));
+    var events = run(input, ragflow(configuredResponseLimit == 0 ? Map.of()
+        : Map.of("MAX_RESPONSE_CHARS", String.valueOf(configuredResponseLimit))));
+    int responseLimit = configuredResponseLimit == 0 ? 200 : configuredResponseLimit;
     assertThat(result(events).path("code").asText()).isEqualTo("0");
     assertThat(requests).hasSize(2);
     var retrieval = requests.getFirst();
@@ -73,7 +76,8 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     assertThat(model.uri()).startsWith("/text/");
     assertThat(model.body().path("stream").asBoolean()).isTrue();
     assertThat(model.body().path("messages").get(0).path("content").asText())
-        .contains("不要提及知识库")
+        .contains("不要提及知识库", "中文不超过" + responseLimit + "字",
+            "English under " + responseLimit + " words", "日本語は" + responseLimit + "字以内")
         .doesNotContain("中文不超过50字", "English under 50 words", "日本語は50字以内");
     assertThat(model.body().path("messages").get(1).path("content").asText())
         .contains("兵马俑于1974年发现。", "兵马俑是什么时候发现的");
@@ -83,15 +87,20 @@ class RagFlowIntegrationTest extends AgentTestSupport {
   }
 
   @ParameterizedTest
-  @CsvSource({"0.7,text,3", "0.69999,text_vision,2"})
-  void imageRoutesKeepClassifierThreshold(String confidence, String model, int count) {
+  @CsvSource({"0.7,text,3,200", "0.69999,text_vision,2,200",
+      "0.7,text,3,80", "0.69999,text_vision,2,80"})
+  void imageRoutesKeepClassifierThreshold(String confidence, String model, int count, int responseLimit) {
     handler = r -> r.uri().equals("/classifier") ? classification(confidence) : retrievalOrDefault(r);
     var input = input();
     input.put("image_url", List.of("https://image.test/exhibit.jpg"));
-    assertThat(result(run(input, ragflow(Map.of()))).path("code").asText()).isEqualTo("0");
+    assertThat(result(run(input, ragflow(Map.of("MAX_RESPONSE_CHARS", String.valueOf(responseLimit)))))
+        .path("code").asText()).isEqualTo("0");
     assertThat(requests).hasSize(count);
     assertThat(requests.getFirst().headers()).containsEntry("x-api-key", "classifier-secret");
     assertThat(requests.getLast().uri()).startsWith("/" + model + "/");
+    assertThat(requests.getLast().body().path("messages").get(0).path("content").asText())
+        .contains("中文不超过" + responseLimit + "字", "English under " + responseLimit + " words",
+            "日本語は" + responseLimit + "字以内");
     if (count == 3) {
       assertThat(requests.get(1).body().path("question").asText()).isEqualTo("检索关于兵马俑的文档");
       assertThat(requests.get(1).body().path("knn_top_k").asInt()).isEqualTo(64);

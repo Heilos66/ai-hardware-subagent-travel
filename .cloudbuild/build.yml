@@ -9,6 +9,8 @@
 #   - CloudBuild2.0 支持配置哪些步骤（id 664483445145706499, itServiceCenter）
 #   - 构建环境 toolbox 方式说明（id 664483452494127105, itServiceCenter）
 # 本流水线目的：满足项目 only_allow_merge_if_pipeline_succeeds 门禁（流水线必须成功才能合并 MR）。
+# FuxiCI compile_java 共享模板单独配置；本文件不会覆盖它的 jdk_version。
+# 该任务也必须选择 JDK 21，并使用 clean compile，详见 docs/verification.md。
 
 version: '2.0'                       # 必填
 
@@ -36,10 +38,10 @@ steps:
   BUILD:                            # 必填：单一构建入口（复用项目 mvnw，不另起 build.sh）
     - build_execute:
         # chmod 兜底防止 checkout 丢执行位（仓库内 mvnw 实际 755，Linux 容器一般保留）
-        # -B 批处理、-ntp 不打印 transfer/progress 噪声
+        # -B 批处理、-V 输出 Maven 实际使用的 JDK、-ntp 不打印 transfer/progress 噪声
         # test 跑单测；测试用 mock WebClient（如 missingClassifierKeyAndSearchConfigDoNotCallNetwork 显式不调网络），不依赖外部服务
         # 想出 jar 改 package；想跑集成测试改 verify
-        command: sh -c 'chmod +x mvnw && ./mvnw -B -ntp test'
+        command: sh -c 'chmod +x mvnw && ./mvnw -B -V -ntp clean test'
 
   # POST_BUILD 暂不配置：本流水线只为 MR 合并门禁，不需要归档 jar。
   # 后续若要持续交付，按 minimal-templates.md §3.1 加：

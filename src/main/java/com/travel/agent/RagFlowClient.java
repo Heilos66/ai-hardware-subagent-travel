@@ -21,11 +21,13 @@ import reactor.util.retry.Retry;
 final class RagFlowClient {
   private final WebClient http;
   private final AgentSettings.RagFlow settings;
+  private final int maxQueryChars;
   private final WorkflowDiagnostics diagnostics;
 
   RagFlowClient(WebClient http, AgentSettings settings) {
     this.http = http;
     this.settings = settings.ragflow;
+    this.maxQueryChars = settings.maxQueryChars;
     this.diagnostics = new WorkflowDiagnostics(settings);
   }
 
@@ -77,8 +79,8 @@ final class RagFlowClient {
     if (!AgentSettings.validId(settings.datasetId())) {
       throw new AgentException("E5004", "RAGFlow知识库ID格式错误：RAGFLOW_DATASET_ID");
     }
-    if (query.isBlank() || Json.length(query) > 1000) {
-      throw new AgentException("400", "检索内容必须为1至1000个字符");
+    if (query.isBlank() || Json.length(query) > maxQueryChars) {
+      throw new AgentException("400", "检索内容必须为1至" + maxQueryChars + "个字符");
     }
   }
 

@@ -74,17 +74,41 @@ class InputValidationTest extends AgentTestSupport {
         .isInstanceOf(AgentException.class);
   }
 
-  @Test
-  void imageLimitsAndUnicodeQueryLength() {
+  @ParameterizedTest
+  @ValueSource(ints = {0, 12, 12000})
+  void imageLimitsAndUnicodeQueryLength(int configuredLimit) {
     var parsed = Inputs.parse(Json.parse("{\"image_base64\":[\"/9j/++8=\"]}"));
     assertThatThrownBy(() -> ImageInput.prepare(parsed, 4)).isInstanceOf(AgentException.class);
+    var config = settings(configuredLimit == 0 ? Map.of()
+        : Map.of("MAX_QUERY_CHARS", String.valueOf(configuredLimit)));
+    int limit = configuredLimit == 0 ? 10_000 : configuredLimit;
     var raw = input();
-    raw.put("query", "旅".repeat(1000));
-    assertThat(result(run(raw)).path("code").asText()).isEqualTo("0");
-    raw.put("query", "旅".repeat(1001));
-    assertThat(result(run(raw)).path("code").asText()).isEqualTo("400");
-    raw.put("query", "😀".repeat(1000));
-    assertThat(result(run(raw)).path("code").asText()).isEqualTo("0");
+    for (String character : List.of("旅", "😀")) {
+      requests.clear();
+      String query = character.repeat(limit);
+      raw.put("query", query);
+      assertThat(result(run(raw, config)).path("code").asText()).isEqualTo("0");
+      assertThat(requests.getFirst().body().path("question").asText()).isEqualTo(query);
+      assertThat(requests.getLast().body().path("messages").get(1).path("content").asText())
+          .contains(query);
+      requests.clear();
+      raw.put("query", query + character);
+      var error = result(run(raw, config));
+      assertThat(error.path("code").asText()).isEqualTo("400");
+      assertThat(error.path("message").asText()).isEqualTo("文本长度不能大于" + limit + "字");
+      assertThatThrownBy(() -> new RagFlowClient(http, config).search(query + character).block())
+          .isInstanceOf(AgentException.class).hasMessage("检索内容必须为1至" + limit + "个字符");
+      assertThat(requests).isEmpty();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"MAX_QUERY_CHARS", "MAX_RESPONSE_CHARS"})
+  void invalidTextLimitsFailAtStartup(String variable) {
+    for (String value : List.of("0", "-1", "1.5", "NaN", "2147483648", "invalid-value")) {
+      assertThatThrownBy(() -> settings(Map.of(variable, value)))
+          .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(variable);
+    }
   }
 
   @ParameterizedTest

@@ -16,6 +16,51 @@ TTFT 另增加 12 项用例，并扩展原有路由/并发/日志故障测试：
 
 仅检查日志相关改动可以执行 `./scripts/verify_logs.sh test`。Maven 可通过 `MAVEN_USER_HOME` 和 `MAVEN_REPO_LOCAL` 指定缓存目录，缓存齐全时使用 `test -o` / `build -o`。
 
+## 静态检查构建环境
+
+FuxiCI 的 `compile_java` 共享模板与仓库的 `.cloudbuild/build.yml` 是独立的配置入口。Dockerfile 和 CloudBuild 使用 JDK 21，不表示静态检查任务也使用了相同的 JDK。
+
+2026-10-30 提供的失败任务使用 `hwjdk8.222`、Maven 3.6.3，命令为 `mvn -B -f pom.xml clean compiler:compile -Dmaven.test.skip=true`。本工程的目标版本是 Java 21；实测 `spring-web 6.2.19` 中的 `GetMapping` 字节码版本为 61，而 JDK 8 编译器只能读取到 52。在本地 JDK 8 对照环境中，导入该类会报告 `cannot access GetMapping` 和 `class file has wrong version 61.0, should be 52.0`。同一依赖中的 `PostMapping`、`RestController` 以及其他 Spring 6 类也受这一限制影响。
+
+### 共享模板需要调整的配置
+
+为本工程覆盖模板参数，或复制一份使用 JDK 21 的模板；平台若不允许修改，由模板维护人提供兼容版本。不要修改其他项目共用的 JDK 8 模板默认值。
+
+| 配置 | 要求 |
+| --- | --- |
+| JDK | 从 `hwjdk8.222` 改为平台实际提供的 JDK 21；这里不预设内部工具版本标识 |
+| Maven | 优先使用工程 Maven Wrapper（3.9.11）；Maven 3.6.3 不是本次字节码版本错误的原因 |
+| 编译命令 | 使用下面的 `clean compile`，不要直接执行 `compiler:compile` |
+| 扫描器 | Java 解析器也要支持本工程语法及依赖字节码；若 Maven 已成功而扫描器仍报类不可访问，检查扫描器版本与完整 Maven 依赖路径 |
+| 执行机 | 本次 `is_docker=false`，需在任务实际执行机上选择兼容 JDK；仓库 Dockerfile 无法覆盖这个设置 |
+
+推荐构建命令：
+
+```bash
+./mvnw -B -V -ntp -f pom.xml clean compile -Dmaven.test.skip=true
+```
+
+若只能使用平台提供的 Maven：
+
+```bash
+mvn -B -V -f pom.xml clean compile -Dmaven.test.skip=true
+```
+
+`-V` 输出 Maven 实际使用的 Java 版本与路径。验收时核对这里为 JDK 21，不能只检查终端中另一个 `java -version` 的输出。扫描工具若另行选择 JDK，也需要同步调整。
+
+POM 已通过 Maven Enforcer 在 `validate` 阶段要求 JDK 21 或更高版本；低版本会直接提示 `Travel Agent requires JDK 21 or newer`。该检查明确诊断环境问题，不会自动安装、切换 JDK 或修改平台模板。`compile` 会先执行 `validate` 和资源处理；直接调用 `compiler:compile` 会跳过这些前置阶段，也会跳过这条 JDK 检查。[Maven 生命周期说明](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)、[JDK 版本检查规则](https://maven.apache.org/enforcer/enforcer-rules/requireJavaVersion.html)
+
+### 同类错误排查与验收
+
+1. 检查 `./mvnw -v` 或 `mvn -v`，确认构建进程实际使用 JDK 21。
+2. 执行上述编译命令，确认 JDK 校验和全部主源码编译通过，再执行 `./mvnw -B -V -ntp clean verify` 验证测试和打包。
+3. 如仍有 `cannot access`，保留其后的完整原因；`wrong version` 检查 JDK/扫描器版本，缺失 JAR 则检查 Maven 仓库访问及扫描 classpath。可运行 `./mvnw -B -ntp dependency:tree -Dincludes=org.springframework:*` 核对 Spring 依赖。
+4. 重新运行平台静态检查。以平台任务成功作为最终验收；本地 JDK 21 构建通过不能代替共享模板已更新的证明。
+
+无需逐个删除 Spring 注解或将类型改为反射；这些写法不能使 JDK 8 兼容 Spring 6。将 `java.version` 改成 8 也不会降低第三方 JAR 的字节码版本。
+
+本地对照验证（2026-10-30）：JDK 8 复现了上述注解导入错误；新增校验在 Maven 3.6.3 + JDK 8 下于编译前明确拒绝，Maven 3.6.3 + JDK 21 编译全部主源码成功。JDK 21 + Maven Wrapper 的 `clean verify` 通过全部 274 项测试并完成 JAR 打包。提供的临时日志域名在本机无法解析，未读取到平台日志，也未修改共享模板或重新执行 FuxiCI 门禁。
+
 ## 本地启动与请求
 
 只验证模型链路时，可先在 `.env` 设置 `RAGFLOW_ENABLED=false`，再构建并启动服务。此时无需知识库凭据和网络；图片请求仍需分类器可用，请求中的模型配置仍需有效。检查 `ragflow_config.enabled=false`，文本/高置信度图片请求应产生 `ragflow_skipped`（attempts=0），随后产生模型 SSE 正文和成功结束帧；视觉分支无检索事件。`workflow_timing` 和 `workflow_ttft` 应标记 `search_mode=disabled`。恢复 true 并重启后，再按下述步骤验证真实检索。自动化回归也验证关闭检索时不读取 Token 文件，以及阶段耗时与 TTFT 加总关系。

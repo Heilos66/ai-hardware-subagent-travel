@@ -38,8 +38,11 @@ final class Prompts {
       List<ExternalServices.KnowledgeChunk> chunks,
       ImageInput image,
       String exhibitName,
-      int maxChars) {
-    SystemMessage system = new SystemMessage(PLAIN_TEXT_SYSTEM_PROMPT);
+      int maxChars,
+      int maxResponseChars) {
+    String lengthLimit = "中文不超过%d字，English under %d words，日本語は%d字以内。"
+        .formatted(maxResponseChars, maxResponseChars, maxResponseChars);
+    SystemMessage system = new SystemMessage(PLAIN_TEXT_SYSTEM_PROMPT + lengthLimit);
     if (image != null) {
       UserMessage user =
           UserMessage.builder()

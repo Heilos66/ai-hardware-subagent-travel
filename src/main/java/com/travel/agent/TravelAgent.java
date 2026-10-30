@@ -94,8 +94,8 @@ final class TravelAgent {
     if (inputs.models().isEmpty()) {
       throw new AgentException("400", "模型参数缺少");
     }
-    if (Json.length(inputs.query()) > 1000) {
-      throw new AgentException("400", "文本长度不能大于1000字");
+    if (Json.length(inputs.query()) > settings.maxQueryChars) {
+      throw new AgentException("400", "文本长度不能大于" + settings.maxQueryChars + "字");
     }
     return inputs;
   }
@@ -110,7 +110,8 @@ final class TravelAgent {
                 chunks ->
                     generate(
                         model,
-                        Prompts.build(query, chunks, null, "", settings.maxContextChars))));
+                        Prompts.build(query, chunks, null, "", settings.maxContextChars,
+                            settings.maxResponseChars))));
   }
 
   private Flux<Step> routeImage(Inputs inputs, String query, ImageInput image) {
@@ -139,11 +140,13 @@ final class TravelAgent {
                               chunks,
                               null,
                               classification.name(),
-                              settings.maxContextChars))));
+                              settings.maxContextChars,
+                              settings.maxResponseChars))));
     }
     return generate(
         inputs.select("text_vision"),
-        Prompts.build(query, List.of(), image, "", settings.maxContextChars));
+        Prompts.build(query, List.of(), image, "", settings.maxContextChars,
+            settings.maxResponseChars));
   }
 
   private Flux<Step> generate(Inputs.ModelConfig config, Prompt prompt) {

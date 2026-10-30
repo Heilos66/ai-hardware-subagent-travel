@@ -184,8 +184,17 @@ CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR=true
 | `MAX_REQUEST_BYTES` | 选填 | `16777216` 字节，16 MiB | 入站 JSON 请求体大小上限；超出返回 HTTP 413 |
 | `MAX_IMAGE_BYTES` | 选填 | `10485760` 字节，10 MiB | Base64 图片解码后的大小上限，并提前检查编码长度；不会据此下载并测量 URL 图片大小 |
 | `MAX_CONTEXT_CHARS` | 选填 | `16000` 字符 | 放入模型提示词的知识片段上下文上限，不是整个模型请求体的大小限制 |
+| `MAX_QUERY_CHARS` | 选填 | `10000` 字符 | 用户 `inputs.query` 上限，按 Unicode 码点计数（汉字、英文字符、单码点 Emoji 均计 1）；超限返回业务 code=400，并停止调用下游。RAGFlow 客户端的检索问题使用相同上限，不截断问题；外部检索服务仍需支持对应长度 |
+| `MAX_RESPONSE_CHARS` | 选填 | `200` | 写入文本和视觉模型的系统提示词：中文/日文不超过该字数、英文少于该词数。不是 `max_tokens`，也不对模型输出强制截断；实际回答长度取决于模型遵循情况 |
 
-以上 3 个 `MAX_*` 变量要求整数，范围 1～2147483647。模型地址、`model_name`、`provider`、`temperature`、`auth_token`、`chat_template_kwargs`、`thinking` 均由请求中的 `inputs.model_config` 传入，不是运行时环境变量；模型请求固定携带 `stream=true`。
+以上 5 个 `MAX_*` 变量要求整数，范围 1～2147483647；未配置或空字符串时使用默认值，非法值会导致启动失败。输入字符上限和请求体字节上限分别生效。模型地址、`model_name`、`provider`、`temperature`、`auth_token`、`chat_template_kwargs`、`thinking` 均由请求中的 `inputs.model_config` 传入，不是运行时环境变量；模型请求固定携带 `stream=true`。
+
+```dotenv
+MAX_QUERY_CHARS=10000
+MAX_RESPONSE_CHARS=200
+```
+
+首次使用这两个变量需要部署包含此实现的镜像；之后修改变量无需重新构建镜像，但需重启本地服务，或发布/切换 AgentArts 运行时配置后生效。
 
 ## 日志与 TTFT
 

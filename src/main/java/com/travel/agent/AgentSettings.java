@@ -17,6 +17,8 @@ public final class AgentSettings {
   final int maxRequestBytes;
   final int maxImageBytes;
   final int maxContextChars;
+  final int maxQueryChars;
+  final int maxResponseChars;
   final double classifierThreshold;
   final boolean classifierFallbackOnTransientError;
   final Duration classifierTimeout;
@@ -80,6 +82,8 @@ public final class AgentSettings {
     maxRequestBytes = integer(env, "MAX_REQUEST_BYTES", 16 * 1024 * 1024, Integer.MAX_VALUE);
     maxImageBytes = integer(env, "MAX_IMAGE_BYTES", 10 * 1024 * 1024, Integer.MAX_VALUE);
     maxContextChars = integer(env, "MAX_CONTEXT_CHARS", 16000, Integer.MAX_VALUE);
+    maxQueryChars = integer(env, "MAX_QUERY_CHARS", 10_000, Integer.MAX_VALUE);
+    maxResponseChars = integer(env, "MAX_RESPONSE_CHARS", 200, Integer.MAX_VALUE);
     classifierThreshold = number(env, "CLASSIFIER_THRESHOLD", .7, 0, 1);
     classifierFallbackOnTransientError = bool(env, "CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", false);
     classifierTimeout = duration(env, "CLASSIFIER_TIMEOUT", 30, 300);
