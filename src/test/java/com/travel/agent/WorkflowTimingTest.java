@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.mock.env.MockEnvironment;
@@ -118,8 +119,9 @@ class WorkflowTimingTest extends AgentTestSupport {
             .path("execution_id")
             .asText();
     awaitTotals(1);
+    String logExecutionId = executionId.substring(0, 8) + "******";
     assertThat(logs)
-        .allMatch(line -> line.contains("execution_id=" + executionId))
+        .allMatch(line -> field(line, "execution_id").equals(logExecutionId))
         .allMatch(line -> line.contains("status=succeeded") && line.contains("search_mode=ragflow"));
     var stages = logs.stream().map(line -> field(line, "stage")).toList();
     if (search.equals("none")) {
@@ -147,7 +149,9 @@ class WorkflowTimingTest extends AgentTestSupport {
             "private-query-42", "model-secret", "search-secret", "classifier-secret", "https://image.test");
     assertThat(ttftLogs).hasSize(1);
     String ttft = ttftLogs.getFirst();
-    assertThat(field(ttft, "execution_id")).isEqualTo(executionId);
+    assertThat(field(ttft, "execution_id")).isEqualTo(logExecutionId);
+    assertThat(logs.toString()).doesNotContain(executionId);
+    assertThat(ttft).doesNotContain(executionId);
     assertThat(field(ttft, "first_token_type")).isEqualTo("reasoning_content");
     assertThat(field(ttft, "response_mode")).isEqualTo("sse");
     assertTtftComponents(ttft, logs);
@@ -341,6 +345,59 @@ class WorkflowTimingTest extends AgentTestSupport {
     assertThat(ttftLogs).hasSize(1);
     assertThat(field(ttftLogs.getFirst(), "response_mode")).isEqualTo("json");
     assertTtftComponents(ttftLogs.getFirst(), logs);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "12345678-90ab-4cde-8fab-0123456789ab,12345678******",
+    "12345678-90ab-4cde-8fab-ffffffffffff,12345678******",
+    "ABCDEF12-90AB-4CDE-8FAB-0123456789AB,ABCDEF12******"
+  })
+  void masksUuidSuffixInEveryTimingRecord(String executionId, String expected) {
+    var timing = new WorkflowTiming(executionId, true);
+    timing.startStage("validate");
+    timing.startStage("model");
+    timing.firstToken(true, false, true);
+    timing.finish("succeeded");
+    assertThat(logs).hasSize(3)
+        .allMatch(line -> field(line, "execution_id").equals(expected));
+    assertThat(ttftLogs).hasSize(1);
+    assertThat(field(ttftLogs.getFirst(), "execution_id")).isEqualTo(expected);
+    assertThat(logs.toString()).doesNotContain(executionId);
+    assertThat(ttftLogs.toString()).doesNotContain(executionId);
+    assertTtftComponents(ttftLogs.getFirst(), logs);
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"short", "private-credential", "12345678-secret\r\nforged=true",
+      "12345678-90ab-4cde-8fab-0123456789ab-secret"})
+  void unexpectedIdsAreFullyMasked(String executionId) {
+    var timing = new WorkflowTiming(executionId, true);
+    timing.startStage("model");
+    timing.firstToken(false, true, false);
+    timing.finish("succeeded");
+    assertThat(logs).hasSize(2)
+        .allMatch(line -> field(line, "execution_id").equals("******"));
+    assertThat(ttftLogs).hasSize(1);
+    assertThat(field(ttftLogs.getFirst(), "execution_id")).isEqualTo("******");
+    assertThat(field(ttftLogs.getFirst(), "first_token_type")).isEqualTo("reasoning_content");
+    assertThat(field(ttftLogs.getFirst(), "response_mode")).isEqualTo("json");
+    assertThat(logs.toString() + ttftLogs)
+        .doesNotContain("private-credential", "secret", "forged=true", "\r", "\n");
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"private-credential", "succeeded\r\nforged=true"})
+  void unexpectedStageAndStatusCannotEnterLogs(String value) {
+    var timing = new WorkflowTiming("12345678-90ab-4cde-8fab-0123456789ab", true);
+    timing.startStage(value);
+    timing.finish(value);
+    assertThat(logs).hasSize(2);
+    assertThat(field(logs.getFirst(), "stage")).isEqualTo("unknown");
+    assertThat(logs).allMatch(line -> field(line, "status").equals("unknown"));
+    assertThat(logs.toString()).doesNotContain("private-credential", "forged=true", "\r", "\n");
   }
 
   private static void assertTtftComponents(String ttft, List<String> stageLogs) {

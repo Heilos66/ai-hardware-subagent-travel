@@ -30,12 +30,12 @@
 | --- | --- |
 | 本地脚本产生的 `target/local-logs/application.log` | 由 `verify_logs.sh` 的 `tee` 在本机写入；不在镜像中，也不会因推送 SWR 而上传 |
 | 镜像中的应用日志 | 由 Logback 输出到容器控制台；启用平台日志记录后，需到对应 LTS 日志流验证采集 |
-| SSE 中的 `execution_id` | 应用为每次工作流生成的 ID，用于关联打点；不等于平台的 runtime ID 或 Session ID |
+| SSE 中的 `execution_id` | 应用为每次工作流生成的 UUID；耗时/TTFT 日志保留前 8 位并追加 `******`，诊断日志保留完整 ID；不等于平台的 runtime ID 或 Session ID |
 | `elapsed_ms` | 本阶段或工作流的毫秒耗时；`total` 不包含客户端到平台的完整网络往返 |
 
 上表依据：[本地验证脚本](../scripts/verify_logs.sh)、[镜像构建文件](../Dockerfile)、[日志实现](../src/main/java/com/travel/agent/WorkflowTiming.java)、[SSE 与 ID 关联实现](../src/main/java/com/travel/agent/WorkflowEvents.java)。
 
-云端验证时先确认运行时使用含打点的镜像版本，然后发送一条业务请求，记下结束帧的 `execution_id`。在日志页面先搜索 `workflow_timing`，再按该请求 ID 检查阶段顺序：
+云端验证时先确认运行时使用含打点的镜像版本，然后发送一条业务请求，记下结束帧的 `execution_id`。在日志页面先搜索 `workflow_timing`，再按该 UUID 前 8 位加 `******` 的形式检查阶段顺序。前缀可能碰撞，应结合时间窗口和完整 ID 的诊断记录核对：
 
 | 请求分支 | 应看到的 stage 顺序 |
 | --- | --- |
@@ -49,7 +49,7 @@
 
 ## 工作流 TTFT
 
-2026-10-11 新增。默认在 INFO 级别输出 `workflow_ttft`，不需要开启检索正文或模型请求体日志。以工作流订阅开始为起点，在模型适配器收到并解析出首个非空 `content` 或 `reasoning_content` 时记录，早于向调用方转发对应 SSE 消息。每次工作流最多一条，沿用同一个 `execution_id`。
+2026-10-11 新增。默认在 INFO 级别输出 `workflow_ttft`，不需要开启检索正文或模型请求体日志。以工作流订阅开始为起点，在模型适配器收到并解析出首个非空 `content` 或 `reasoning_content` 时记录，早于向调用方转发对应 SSE 消息。每次工作流最多一条，与阶段耗时日志共用同一个脱敏 `execution_id`。
 
 这里的 TTFT 覆盖工作流内的校验、分类、检索、提示词准备及模型首片等待，不包含客户端到 AgentArts/应用的入站网络耗时，也不包含向客户端发送首片的网络耗时。接口无法观测模型内部单个 token 的生成时刻，因此使用首个有效响应片段的接收时刻。只有角色的空片段、心跳、usage 及结束标记不触发计时；思考先到时，`first_token_type=reasoning_content`。
 
@@ -70,12 +70,29 @@
 以下为示意值，所有信息实际在同一行：
 
 ```text
-workflow_ttft execution_id=example ttft_ms=1000.0 validate_ms=2.0 classify_ms=80.0 search_text_ms=0.0 search_image_ms=150.0 model_to_first_token_ms=765.0 stages_sum_ms=997.0 overhead_ms=3.0 first_token_type=reasoning_content response_mode=sse search_mode=ragflow
+workflow_ttft execution_id=12345678****** ttft_ms=1000.0 validate_ms=2.0 classify_ms=80.0 search_text_ms=0.0 search_image_ms=150.0 model_to_first_token_ms=765.0 stages_sum_ms=997.0 overhead_ms=3.0 first_token_type=reasoning_content response_mode=sse search_mode=ragflow
 ```
 
 这条日志在模型还在继续输出时就产生。原有 `stage=model` 仍记录整个模型阶段，`stage=total` 仍记录完整工作流，不应将这些完整耗时再加进 TTFT。首片前失败/超时/取消以及能力查询不产生 TTFT；首片后失败/取消保留已产生的 TTFT，最终成败仍以阶段/total 日志和 SSE 结束帧为准。
 
-本地执行 `./scripts/verify_logs.sh logs 实际execution_id` 会同时显示 TTFT、阶段耗时和诊断记录；云端按 `workflow_ttft` 与 execution_id 搜索。TTFT 不包含问题、知识正文或凭据，使用现有非阻塞异步日志队列，日志故障不会中断模型流。
+本地执行 `./scripts/verify_logs.sh logs 实际execution_id`，传入 SSE 的完整 UUID 即可同时匹配完整 ID 和脱敏 ID，显示 TTFT、阶段耗时和诊断记录；云端搜索 TTFT 时使用脱敏 ID。TTFT 不包含问题、知识正文或凭据，使用现有非阻塞异步日志队列，日志故障不会中断模型流。
+
+### G.OTH.06 日志字段核验
+
+针对“禁止在用户界面、日志中暴露不必要信息”的告警，耗时日志的数据来源如下。仅凭告警位于 `LOG.info` 行，无法判断检查器识别了哪个敏感字段；不能把模型生成片段的 token 与鉴权 Token 混为一谈。
+
+| 字段 | 数据来源与限制 |
+| --- | --- |
+| `execution_id` | `WorkflowEvents.State` 内部生成的随机 UUID；`WorkflowTiming` 只存储脱敏值，用 `String.replace` 将 UUID 后缀替换为 `******`，非标准 UUID 全部输出 `******` |
+| 所有 `_ms` 字段 | `System.nanoTime()` 的时间差换算；用于阶段耗时和 TTFT 加总校验，不接收请求字段 |
+| `first_token_type` | 只由“有正文/有思考片段”两个布尔值选择固定类别，不记录正文、思考内容或鉴权值 |
+| `response_mode` | 接口接收布尔值，只输出 `sse` 或 `json`，不接收原始响应头字符串 |
+| `search_mode` | 由检索开关选择固定的 `ragflow` 或 `disabled` |
+| 阶段日志的 `stage` / `status` | 仅输出固定类别，未知值输出 `unknown`，防止任意字符串或换行进入日志 |
+
+耗时日志保留现有字段名和数值含义，以支持性能排查。密钥不进入该计时对象；实际模型/检索诊断内容使用独立的脱敏逻辑。本地验证覆盖非标准 ID、异常标签、三条业务路由、SSE/JSON 首片计时和日志故障隔离；CodeCheck 的具体敏感数据识别逻辑无法在本地复现，是否消除告警以平台使用同一规则复扫为准。若仍触发，需结合该规则的命中字段或数据流详情，用本表逐项核验。
+
+2026-10-30 本地验证：34 项耗时日志测试和 55 项诊断日志测试全部通过，修复了此前 ID 脱敏后 3 个路由关联断言不匹配的问题；本地筛选脚本验证了完整 UUID、脱敏 UUID、旧版完整 ID 日志及排除其他请求的情况。本次未运行平台 CodeCheck。
 
 ## 检索与模型请求诊断日志
 

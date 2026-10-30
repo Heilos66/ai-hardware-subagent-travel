@@ -31,6 +31,7 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
   ./scripts/verify_logs.sh logs
 
 日志判定：
+  logs 传入 SSE 完整 UUID 时，同时匹配完整 ID 和“前 8 位 + ******”的脱敏 ID。
   文本：validate → search_text → model → total
   高置信度图片：validate → classify → search_image → model → total
   低置信度图片：validate → classify → model → total
@@ -174,7 +175,11 @@ PY
       matches="$(grep -E 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
     fi
     if [[ -n "${1:-}" ]]; then
-      matches="$(printf '%s\n' "$matches" | grep -F -- " execution_id=$1 " || true)"
+      id_patterns=(-e " execution_id=$1 ")
+      if [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+        id_patterns+=(-e " execution_id=${1:0:8}****** ")
+      fi
+      matches="$(printf '%s\n' "$matches" | grep -F "${id_patterns[@]}" -- || true)"
     fi
     if [[ -n "$matches" ]]; then
       printf '%s\n' "$matches"

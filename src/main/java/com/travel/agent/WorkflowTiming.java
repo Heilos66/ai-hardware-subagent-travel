@@ -2,13 +2,16 @@ package com.travel.agent;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Per-subscription timing only; never receives request data or credentials. */
 final class WorkflowTiming {
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowTiming.class);
-  private final String executionId;
+  private static final Pattern EXECUTION_ID_PATTERN = Pattern.compile(
+      "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+  private final String logExecutionId;
   private final String searchMode;
   private final long started = System.nanoTime();
   private final Map<String, Long> completedNanos = new HashMap<>();
@@ -18,7 +21,7 @@ final class WorkflowTiming {
   private boolean firstTokenReceived;
 
   WorkflowTiming(String executionId, boolean retrievalEnabled) {
-    this.executionId = executionId;
+    this.logExecutionId = maskId(executionId);
     this.searchMode = retrievalEnabled ? "ragflow" : "disabled";
   }
 
@@ -28,7 +31,7 @@ final class WorkflowTiming {
     }
     long now = System.nanoTime();
     finishStage("succeeded", now);
-    stage = next;
+    stage = stageName(next);
     stageStarted = now;
   }
 
@@ -47,7 +50,7 @@ final class WorkflowTiming {
     log(current, status, elapsed);
   }
 
-  synchronized void firstToken(boolean hasContent, boolean hasReasoning, String responseMode) {
+  synchronized void firstToken(boolean hasContent, boolean hasReasoning, boolean streaming) {
     if (finished || firstTokenReceived || !"model".equals(stage)
         || (!hasContent && !hasReasoning)) {
       return;
@@ -64,14 +67,16 @@ final class WorkflowTiming {
     String type = hasContent && hasReasoning ? "content_and_reasoning"
         : hasReasoning ? "reasoning_content" : "content";
     try {
+      // G.OTH.06: only a masked UUID, durations and fixed categories are logged.
+      // "token" denotes a generated response fragment, never an authentication credential.
       LOG.info(
           "workflow_ttft execution_id={} ttft_ms={} validate_ms={} classify_ms={}"
               + " search_text_ms={} search_image_ms={} model_to_first_token_ms={}"
               + " stages_sum_ms={} overhead_ms={} first_token_type={} response_mode={}"
               + " search_mode={}",
-          executionId, millis(ttft), millis(validate), millis(classify), millis(searchText),
+          logExecutionId, millis(ttft), millis(validate), millis(classify), millis(searchText),
           millis(searchImage), millis(modelFirst), millis(sum), millis(ttft - sum), type,
-          responseMode, searchMode);
+          streaming ? "sse" : "json", searchMode);
     } catch (RuntimeException ignored) { // A failed TTFT log must not consume a token or interrupt the model stream.
     }
   }
@@ -90,13 +95,42 @@ final class WorkflowTiming {
     return Math.round(nanos / 1000.0) / 1000.0;
   }
 
+  private static String maskId(String id) {
+    if (id == null || !EXECUTION_ID_PATTERN.matcher(id).matches()) {
+      return "******";
+    }
+    // Internally generated UUIDs have a 28-character suffix; literal replacement
+    // cannot match the retained 8-character prefix or interpret regex metacharacters.
+    return id.replace(id.substring(8), "******");
+  }
+
+  private static String stageName(String value) {
+    return switch (value) {
+      case "validate" -> "validate";
+      case "classify" -> "classify";
+      case "search_text" -> "search_text";
+      case "search_image" -> "search_image";
+      case "model" -> "model";
+      case null, default -> "unknown";
+    };
+  }
+
+  private static String statusName(String value) {
+    return switch (value) {
+      case "succeeded" -> "succeeded";
+      case "failed" -> "failed";
+      case "cancelled" -> "cancelled";
+      case null, default -> "unknown";
+    };
+  }
+
   private void log(String stage, String status, long elapsedNanos) {
     try {
       LOG.info(
           "workflow_timing execution_id={} stage={} status={} elapsed_ms={} search_mode={}",
-          executionId,
+          logExecutionId,
           stage,
-          status,
+          statusName(status),
           millis(elapsedNanos),
           searchMode);
     } catch (RuntimeException ignored) { // Instrumentation failures must not change SSE results or upstream cancellation.

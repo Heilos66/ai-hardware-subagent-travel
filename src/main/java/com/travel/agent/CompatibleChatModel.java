@@ -168,7 +168,7 @@ final class CompatibleChatModel implements ChatModel {
                         !output.getText().isEmpty(),
                         !((String) output.getMetadata().getOrDefault(REASONING_DELTA, ""))
                             .isEmpty(),
-                        streaming ? "sse" : "json");
+                        streaming);
                   });
         });
   }
