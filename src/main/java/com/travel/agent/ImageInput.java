@@ -21,29 +21,31 @@ record ImageInput(String url, String base64, String mime) {
       throw new AgentException("400", "image_url和image_base64不能同时提供");
     }
     if (!url.isEmpty()) {
-      URI uri;
-      try {
-        uri = AgentSettings.httpUri(url);
-      } catch (IllegalArgumentException e) {
-        throw new AgentException("400", "图片地址必须是有效的HTTP或HTTPS链接");
-      }
-      String path = uri.getPath().toLowerCase(Locale.ROOT);
-      String mime = path.endsWith(".png") ? "image/png" : "image/jpeg";
-      if (!path.endsWith(".jpg") && !path.endsWith(".jpeg") && !path.endsWith(".png")) {
-        throw new AgentException("400", "仅支持JPG、JPEG、PNG格式图片");
-      }
-      return new ImageInput(url, "", mime);
+      return fromUrl(url);
     }
     if (encoded.isEmpty()) {
       return new ImageInput("", "", "");
     }
-    if (encoded.startsWith("data:")) {
-      int comma = encoded.indexOf(',');
-      if (comma < 0 || !encoded.substring(0, comma).toLowerCase(Locale.ROOT).endsWith(";base64")) {
-        throw new AgentException("400", "Base64图片数据无效");
-      }
-      encoded = encoded.substring(comma + 1);
+    return decodeBase64(encoded, maxBytes);
+  }
+
+  private static ImageInput fromUrl(String url) {
+    URI uri;
+    try {
+      uri = AgentSettings.httpUri(url);
+    } catch (IllegalArgumentException e) {
+      throw new AgentException("400", "图片地址必须是有效的HTTP或HTTPS链接");
     }
+    String path = uri.getPath().toLowerCase(Locale.ROOT);
+    String mime = path.endsWith(".png") ? "image/png" : "image/jpeg";
+    if (!path.endsWith(".jpg") && !path.endsWith(".jpeg") && !path.endsWith(".png")) {
+      throw new AgentException("400", "仅支持JPG、JPEG、PNG格式图片");
+    }
+    return new ImageInput(url, "", mime);
+  }
+
+  private static ImageInput decodeBase64(String encoded, int maxBytes) {
+    encoded = stripDataUriPrefix(encoded);
     encoded = encoded.replaceAll("(?U)\\s", "").replace('-', '+').replace('_', '/');
     if (encoded.length() > 4L * ((maxBytes + 2L) / 3)) {
       throw new AgentException("400", "图片大小超限");
@@ -60,15 +62,29 @@ record ImageInput(String url, String base64, String mime) {
     if (decoded.length > maxBytes) {
       throw new AgentException("400", "图片大小超限");
     }
-    String mime;
-    if (startsWith(decoded, new byte[] {(byte) 137, 80, 78, 71, 13, 10, 26, 10})) {
-      mime = "image/png";
-    } else if (startsWith(decoded, new byte[] {(byte) 255, (byte) 216, (byte) 255})) {
-      mime = "image/jpeg";
-    } else {
-      throw new AgentException("400", "仅支持JPG、JPEG、PNG格式图片");
-    }
+    String mime = detectMime(decoded);
     return new ImageInput("", Base64.getEncoder().encodeToString(decoded), mime);
+  }
+
+  private static String stripDataUriPrefix(String encoded) {
+    if (!encoded.startsWith("data:")) {
+      return encoded;
+    }
+    int comma = encoded.indexOf(',');
+    if (comma < 0 || !encoded.substring(0, comma).toLowerCase(Locale.ROOT).endsWith(";base64")) {
+      throw new AgentException("400", "Base64图片数据无效");
+    }
+    return encoded.substring(comma + 1);
+  }
+
+  private static String detectMime(byte[] decoded) {
+    if (startsWith(decoded, new byte[] {(byte) 137, 80, 78, 71, 13, 10, 26, 10})) {
+      return "image/png";
+    }
+    if (startsWith(decoded, new byte[] {(byte) 255, (byte) 216, (byte) 255})) {
+      return "image/jpeg";
+    }
+    throw new AgentException("400", "仅支持JPG、JPEG、PNG格式图片");
   }
 
   private static boolean startsWith(byte[] data, byte[] prefix) {

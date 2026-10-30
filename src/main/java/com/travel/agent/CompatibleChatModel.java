@@ -21,9 +21,11 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 /**
  * Spring AI provider adapter for the existing full-URL and legacy proxy contracts. This adapter's
@@ -77,98 +79,125 @@ final class CompatibleChatModel implements ChatModel {
               && !settings.modelAllowedHosts.contains(endpoint.getHost().toLowerCase(Locale.ROOT))) {
             return Flux.error(new AgentException("400", "模型endpoint不在允许的主机列表中"));
           }
-          Map<String, Object> request = new LinkedHashMap<>();
-          ChatOptions options =
-              prompt.getOptions() == null ? getDefaultOptions() : prompt.getOptions();
-          request.put("model", options.getModel() == null ? config.model() : options.getModel());
-          request.put("messages", messages(prompt));
-          request.put(
-              "temperature",
-              options.getTemperature() == null ? config.temperature() : options.getTemperature());
-          request.put("stream", true);
-          if (config.chatTemplateKwargs() != null) {
-            request.put("chat_template_kwargs", config.chatTemplateKwargs());
-          }
-          if (config.thinking() != null) {
-            request.put("thinking", config.thinking());
-          }
+          Map<String, Object> request = buildRequest(prompt);
           boolean direct = config.provider().equalsIgnoreCase("openai-compatible");
-          Object body = request;
-          if (!direct) {
-            endpoint = proxyEndpoint(config);
-            body =
-                Map.of(
-                    "temp_token",
-                    config.token(),
-                    "action",
-                    config.type().equals("text_vision") ? "invoke_text_vision" : "invoke_text",
-                    "model_request",
-                    request);
-          }
-          WebClient.RequestBodySpec call =
-              http.post()
-                  .uri(endpoint)
-                  .contentType(MediaType.APPLICATION_JSON)
-                  .accept(MediaType.TEXT_EVENT_STREAM)
-                  .header("User-Agent", "travel-agent/2.0");
-          if (direct) {
-            call.header(
-                "Authorization",
-                config.token().toLowerCase(Locale.ROOT).startsWith("bearer ")
-                    ? config.token()
-                    : "Bearer " + config.token());
-          }
-          diagnostics.modelRequest(context, config, body);
-          return call.bodyValue(body)
-              .exchangeToFlux(
-                  reply -> {
-                    failure.response(reply.statusCode().value(), reply.headers().asHttpHeaders());
-                    if (!reply.statusCode().is2xxSuccessful()) {
-                      return Flux.error(
-                          AgentException.model("模型服务返回HTTP " + reply.statusCode().value()));
-                    }
-                    MediaType type =
-                        reply.headers().contentType().orElse(MediaType.APPLICATION_JSON);
-                    boolean streaming = MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type);
-                    Flux<ChatResponse> responses;
-                    if (streaming) {
-                      StreamState state = new StreamState(failure);
-                      responses = SseDecoder.decode(reply.bodyToFlux(DataBuffer.class))
-                          .takeUntil(event -> event.data().strip().equals("[DONE]"))
-                          .concatMap(state::decode, 1)
-                          .concatWith(Flux.defer(state::finish));
-                    } else {
-                      responses = reply
-                          .bodyToMono(byte[].class)
-                          .defaultIfEmpty(new byte[0])
-                          .map(bytes -> normalize(Json.parse(bytes)))
-                          .flux();
-                    }
-                    // Observe the first parsed upstream token before Spring AI/SSE forwarding.
-                    return responses.doOnNext(part -> {
-                      failure.token(part);
-                      context
-                        .<WorkflowTiming>getOrEmpty(WorkflowTiming.class)
-                        .ifPresent(timing -> {
-                          var output = part.getResult().getOutput();
-                          timing.firstToken(!output.getText().isEmpty(),
-                              !((String) output.getMetadata().getOrDefault(REASONING_DELTA, "")).isEmpty(),
-                              streaming ? "sse" : "json");
-                        });
-                    });
-                  })
+          RequestTarget target = buildTarget(endpoint, request, direct);
+          WebClient.RequestBodySpec call = buildCallSpec(target, direct);
+          diagnostics.modelRequest(context, config, target.body());
+          return call.bodyValue(target.body())
+              .exchangeToFlux(reply -> handleReply(reply, context, failure))
               .timeout(
                   Mono.delay(settings.modelTimeout),
                   part -> Mono.delay(Duration.ofNanos(Math.max(0, deadline - System.nanoTime()))))
               .doOnError(error -> diagnostics.modelFailure(context, config, failure, error))
-              .onErrorMap(
-                  e ->
-                      e instanceof AgentException
-                          ? e
-                          : AgentException.model(
-                              e instanceof TimeoutException ? "模型服务调用超时" : "模型服务连接失败或响应格式错误"));
+              .onErrorMap(this::mapError);
         });
   }
+
+  private Map<String, Object> buildRequest(Prompt prompt) {
+    Map<String, Object> request = new LinkedHashMap<>();
+    ChatOptions options =
+        prompt.getOptions() == null ? getDefaultOptions() : prompt.getOptions();
+    request.put("model", options.getModel() == null ? config.model() : options.getModel());
+    request.put("messages", messages(prompt));
+    request.put(
+        "temperature",
+        options.getTemperature() == null ? config.temperature() : options.getTemperature());
+    request.put("stream", true);
+    if (config.chatTemplateKwargs() != null) {
+      request.put("chat_template_kwargs", config.chatTemplateKwargs());
+    }
+    if (config.thinking() != null) {
+      request.put("thinking", config.thinking());
+    }
+    return request;
+  }
+
+  private RequestTarget buildTarget(URI endpoint, Map<String, Object> request, boolean direct) {
+    if (direct) {
+      return new RequestTarget(endpoint, request);
+    }
+    URI proxy = proxyEndpoint(config);
+    Object body =
+        Map.of(
+            "temp_token", config.token(),
+            "action",
+            config.type().equals("text_vision") ? "invoke_text_vision" : "invoke_text",
+            "model_request", request);
+    return new RequestTarget(proxy, body);
+  }
+
+  private WebClient.RequestBodySpec buildCallSpec(RequestTarget target, boolean direct) {
+    WebClient.RequestBodySpec call =
+        http.post()
+            .uri(target.endpoint())
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.TEXT_EVENT_STREAM)
+            .header("User-Agent", "travel-agent/2.0");
+    if (direct) {
+      call.header(
+          "Authorization",
+          config.token().toLowerCase(Locale.ROOT).startsWith("bearer ")
+              ? config.token()
+              : "Bearer " + config.token());
+    }
+    return call;
+  }
+
+  private Flux<ChatResponse> handleReply(
+      ClientResponse reply, ContextView context, ModelFailureDetails failure) {
+    failure.response(reply.statusCode().value(), reply.headers().asHttpHeaders());
+    if (!reply.statusCode().is2xxSuccessful()) {
+      return Flux.error(
+          AgentException.model("模型服务返回HTTP " + reply.statusCode().value()));
+    }
+    MediaType type = reply.headers().contentType().orElse(MediaType.APPLICATION_JSON);
+    boolean streaming = MediaType.TEXT_EVENT_STREAM.isCompatibleWith(type);
+    Flux<ChatResponse> responses =
+        streaming ? streamResponses(reply, failure) : jsonResponses(reply);
+    // Observe the first parsed upstream token before Spring AI/SSE forwarding.
+    return responses.doOnNext(
+        part -> {
+          failure.token(part);
+          context
+              .<WorkflowTiming>getOrEmpty(WorkflowTiming.class)
+              .ifPresent(
+                  timing -> {
+                    var output = part.getResult().getOutput();
+                    timing.firstToken(
+                        !output.getText().isEmpty(),
+                        !((String) output.getMetadata().getOrDefault(REASONING_DELTA, ""))
+                            .isEmpty(),
+                        streaming ? "sse" : "json");
+                  });
+        });
+  }
+
+  private Flux<ChatResponse> streamResponses(ClientResponse reply, ModelFailureDetails failure) {
+    StreamState state = new StreamState(failure);
+    return SseDecoder.decode(reply.bodyToFlux(DataBuffer.class))
+        .takeUntil(event -> event.data().strip().equals("[DONE]"))
+        .concatMap(state::decode, 1)
+        .concatWith(Flux.defer(state::finish));
+  }
+
+  private Flux<ChatResponse> jsonResponses(ClientResponse reply) {
+    return reply
+        .bodyToMono(byte[].class)
+        .defaultIfEmpty(new byte[0])
+        .map(bytes -> normalize(Json.parse(bytes)))
+        .flux();
+  }
+
+  private Throwable mapError(Throwable e) {
+    if (e instanceof AgentException) {
+      return e;
+    }
+    return AgentException.model(
+        e instanceof TimeoutException ? "模型服务调用超时" : "模型服务连接失败或响应格式错误");
+  }
+
+  private record RequestTarget(URI endpoint, Object body) {}
 
   static URI proxyEndpoint(Inputs.ModelConfig config) {
     URI uri = config.endpoint();
@@ -218,22 +247,22 @@ final class CompatibleChatModel implements ChatModel {
     if (body == null || !body.isObject()) {
       throw AgentException.model("模型响应必须是JSON对象");
     }
-    JsonNode message;
-    if (body.has("code")) {
-      JsonNode code = body.get("code");
-      if (!((code.isNumber() && code.asDouble() == 0)
-          || (code.isTextual() && code.asText().equals("0")))) {
-        throw AgentException.model("模型服务返回业务错误");
-      }
-      message = body;
-    } else {
-      message = body.path("choices").path(0).path("message");
-    }
-    JsonNode text = message.path(body.has("code") ? "message" : "content");
+    boolean legacy = body.has("code");
+    JsonNode message = legacy ? legacyMessage(body) : body.path("choices").path(0).path("message");
+    JsonNode text = message.path(legacy ? "message" : "content");
     if (!text.isTextual() || text.asText().isBlank()) {
       throw AgentException.model("模型响应message.content为空或格式错误");
     }
     return response(text.asText(), optionalText(message.get("reasoning_content")));
+  }
+
+  private static JsonNode legacyMessage(JsonNode body) {
+    JsonNode code = body.get("code");
+    if (!((code.isNumber() && code.asDouble() == 0)
+        || (code.isTextual() && code.asText().equals("0")))) {
+      throw AgentException.model("模型服务返回业务错误");
+    }
+    return body;
   }
 
   private static String optionalText(JsonNode node) {
@@ -269,17 +298,29 @@ final class CompatibleChatModel implements ChatModel {
     }
 
     List<ChatResponse> accept(SseDecoder.Event event) {
+      JsonNode chunk = parseChunk(event);
+      if (chunk == null) {
+        return List.of();
+      }
+      return processChoices(chunk.path("choices"));
+    }
+
+    private JsonNode parseChunk(SseDecoder.Event event) {
       if (event.name().equals("error")) {
         throw AgentException.model("模型服务返回流式错误");
       }
-      if (event.data().strip().equals("[DONE]")) {
+      String data = event.data().strip();
+      if (data.equals("[DONE]")) {
         completed = true;
-        return List.of();
+        return null;
       }
-      if (event.data().isBlank()) {
-        return List.of();
+      if (data.isBlank()) {
+        return null;
       }
-      JsonNode chunk = Json.parse(event.data());
+      return validateChunk(Json.parse(data));
+    }
+
+    private static JsonNode validateChunk(JsonNode chunk) {
       if (chunk == null || !chunk.isObject()) {
         throw AgentException.model("模型流式数据格式错误");
       }
@@ -288,49 +329,72 @@ final class CompatibleChatModel implements ChatModel {
       }
       JsonNode choices = chunk.path("choices");
       if (choices.isArray() && choices.isEmpty() && chunk.has("usage")) {
-        return List.of();
+        return null;
       }
       if (!choices.isArray() || choices.isEmpty()) {
         throw AgentException.model("模型流式数据缺少choices");
       }
+      return chunk;
+    }
+
+    private List<ChatResponse> processChoices(JsonNode choices) {
       List<ChatResponse> result = new ArrayList<>();
       for (JsonNode choice : choices) {
-        if (!choice.isObject()) {
-          throw AgentException.model("模型流式choice格式错误");
-        }
-        if (choice.path("index").asInt(0) != 0) {
-          continue;
-        }
-        JsonNode delta = choice.path("delta");
-        if (!delta.isObject()) {
-          throw AgentException.model("模型流式数据缺少delta");
-        }
-        JsonNode finish = choice.path("finish_reason");
-        String reason = finish.isTextual() ? finish.asText() : "";
-        if (!reason.isEmpty()) {
-          failure.finishReason(reason);
-        }
-        if (reason.equals("content_filter")) {
-          throw AgentException.model("模型回答被内容过滤");
-        }
-        String text = optionalText(delta.get("content"));
-        String reasoning = optionalText(delta.get("reasoning_content"));
-        hasText |= !text.isBlank();
-        if (!text.isEmpty() || !reasoning.isEmpty()) {
-          result.add(response(text, reasoning));
-        }
-        if (reason.equals("stop")) {
-          completed = true;
-        } else if (!reason.isEmpty()) {
-          terminalError = AgentException.model(switch (reason) {
-            case "length" -> "回答因长度限制未完整生成";
-            case "tool_calls", "function_call" -> "模型请求调用工具，当前流程不支持，回答未完成";
-            default -> "模型返回未知结束原因，回答未完成";
-          });
+        processChoice(choice, result);
+        if (terminalError != null) {
           break;
         }
       }
       return result;
+    }
+
+    private void processChoice(JsonNode choice, List<ChatResponse> result) {
+      JsonNode delta = choiceDelta(choice);
+      if (delta == null) {
+        return;
+      }
+      JsonNode finish = choice.path("finish_reason");
+      String reason = finish.isTextual() ? finish.asText() : "";
+      String text = optionalText(delta.get("content"));
+      String reasoning = optionalText(delta.get("reasoning_content"));
+      hasText |= !text.isBlank();
+      if (!text.isEmpty() || !reasoning.isEmpty()) {
+        result.add(response(text, reasoning));
+      }
+      applyFinishReason(reason);
+    }
+
+    private static JsonNode choiceDelta(JsonNode choice) {
+      if (!choice.isObject()) {
+        throw AgentException.model("模型流式choice格式错误");
+      }
+      if (choice.path("index").asInt(0) != 0) {
+        return null;
+      }
+      JsonNode delta = choice.path("delta");
+      if (!delta.isObject()) {
+        throw AgentException.model("模型流式数据缺少delta");
+      }
+      return delta;
+    }
+
+    private void applyFinishReason(String reason) {
+      if (reason.isEmpty()) {
+        return;
+      }
+      failure.finishReason(reason);
+      if (reason.equals("content_filter")) {
+        throw AgentException.model("模型回答被内容过滤");
+      }
+      if (reason.equals("stop")) {
+        completed = true;
+        return;
+      }
+      terminalError = AgentException.model(switch (reason) {
+        case "length" -> "回答因长度限制未完整生成";
+        case "tool_calls", "function_call" -> "模型请求调用工具，当前流程不支持，回答未完成";
+        default -> "模型返回未知结束原因，回答未完成";
+      });
     }
 
     Flux<ChatResponse> finish() {

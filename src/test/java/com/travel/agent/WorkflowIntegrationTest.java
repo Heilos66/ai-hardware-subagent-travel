@@ -154,15 +154,27 @@ class WorkflowIntegrationTest extends AgentTestSupport {
     var captured = requests.getLast();
     JsonNode body = captured.body();
     if (!provider.equals("openai-compatible")) {
-      assertThat(captured.uri())
-          .isEqualTo("/proxy/runtimes/test-model/invocations/stream?endpoint=Latest");
-      assertThat(captured.headers()).doesNotContainKey("authorization");
-      assertThat(body.path("temp_token").asText()).isEqualTo("model-secret");
-      assertThat(body.path("action").asText())
-          .isEqualTo(type.equals("text") ? "invoke_text" : "invoke_text_vision");
-      body = body.get("model_request");
+      body = assertProxyContract(captured, type);
     }
     assertThat(body.path("stream").asBoolean()).isTrue();
+    assertOptionalFields(body, options);
+    if (type.equals("text_vision")) {
+      assertVisionImage(body);
+    }
+  }
+
+  private static JsonNode assertProxyContract(Captured captured, String type) {
+    assertThat(captured.uri())
+        .isEqualTo("/proxy/runtimes/test-model/invocations/stream?endpoint=Latest");
+    assertThat(captured.headers()).doesNotContainKey("authorization");
+    JsonNode body = captured.body();
+    assertThat(body.path("temp_token").asText()).isEqualTo("model-secret");
+    assertThat(body.path("action").asText())
+        .isEqualTo(type.equals("text") ? "invoke_text" : "invoke_text_vision");
+    return body.get("model_request");
+  }
+
+  private static void assertOptionalFields(JsonNode body, Map<String, Object> options) {
     for (String field : List.of("thinking", "chat_template_kwargs")) {
       Object option = options.get(field);
       if (option == null) {
@@ -175,17 +187,18 @@ class WorkflowIntegrationTest extends AgentTestSupport {
                     : Json.MAPPER.valueToTree(option));
       }
     }
-    if (type.equals("text_vision")) {
-      assertThat(
-              body.path("messages")
-                  .get(1)
-                  .path("content")
-                  .get(1)
-                  .path("image_url")
-                  .path("url")
-                  .asText())
-          .isEqualTo("data:image/jpeg;base64,/9j/++8=");
-    }
+  }
+
+  private static void assertVisionImage(JsonNode body) {
+    assertThat(
+            body.path("messages")
+                .get(1)
+                .path("content")
+                .get(1)
+                .path("image_url")
+                .path("url")
+                .asText())
+        .isEqualTo("data:image/jpeg;base64,/9j/++8=");
   }
 
   @ParameterizedTest

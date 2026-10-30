@@ -106,6 +106,10 @@ final class ExternalServices {
     if (name.isEmpty() || (!raw.isNumber() && !raw.isTextual())) {
       throw malformedClassification();
     }
+    return new Classification(name, parseConfidence(raw));
+  }
+
+  private static double parseConfidence(JsonNode raw) {
     try {
       String value = raw.asText().strip();
       boolean percent = value.endsWith("%");
@@ -117,7 +121,7 @@ final class ExternalServices {
       if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1) {
         throw malformedClassification();
       }
-      return new Classification(name, confidence);
+      return confidence;
     } catch (NumberFormatException e) {
       throw malformedClassification();
     }

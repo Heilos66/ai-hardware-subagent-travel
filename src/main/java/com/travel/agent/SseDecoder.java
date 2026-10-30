@@ -60,17 +60,7 @@ final class SseDecoder {
   }
 
   private void acceptLine(List<Event> events) {
-    String text;
-    try {
-      text =
-          StandardCharsets.UTF_8
-              .newDecoder()
-              .onMalformedInput(CodingErrorAction.REPORT)
-              .decode(ByteBuffer.wrap(line.toByteArray()))
-              .toString();
-    } catch (CharacterCodingException e) {
-      throw AgentException.model("模型响应不是有效UTF-8");
-    }
+    String text = decodeLine();
     line.reset();
     if (firstLine) {
       firstLine = false;
@@ -86,6 +76,22 @@ final class SseDecoder {
       // SSE spec: comment lines are part of the event frame and count toward MAX_EVENT_BYTES.
       return;
     }
+    applyField(text);
+  }
+
+  private String decodeLine() {
+    try {
+      return StandardCharsets.UTF_8
+          .newDecoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .decode(ByteBuffer.wrap(line.toByteArray()))
+          .toString();
+    } catch (CharacterCodingException e) {
+      throw AgentException.model("模型响应不是有效UTF-8");
+    }
+  }
+
+  private void applyField(String text) {
     int colon = text.indexOf(':');
     String field = colon < 0 ? text : text.substring(0, colon);
     String value = colon < 0 ? "" : text.substring(colon + 1);

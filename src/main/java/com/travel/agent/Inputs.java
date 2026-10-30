@@ -34,42 +34,45 @@ record Inputs(
         throw AgentException.badInput();
       }
       for (JsonNode model : models) {
-        if (!model.isObject()) {
-          throw AgentException.badInput();
-        }
-        String type = string(model, "type", null);
-        if (!List.of("text", "text_vision").contains(type)) {
-          throw AgentException.badInput();
-        }
-        String provider = required(model, "provider");
-        String name = required(model, "model_name");
-        String token = required(model, "auth_token");
-        JsonNode temp = model.path("temperature");
-        double temperature = .1;
-        if (!temp.isMissingNode()) {
-          if (!temp.isNumber() && !temp.isTextual()) {
-            throw AgentException.badInput();
-          }
-          temperature = Double.parseDouble(temp.asText());
-          if (!Double.isFinite(temperature)) {
-            throw AgentException.badInput();
-          }
-        }
-        configs.add(
-            new ModelConfig(
-                type,
-                provider,
-                AgentSettings.httpUri(required(model, "endpoint")),
-                name,
-                temperature,
-                token,
-                options(model.get("chat_template_kwargs")),
-                options(model.get("thinking"))));
+        configs.add(parseModelConfig(model));
       }
       return new Inputs(query, urls, encoded, List.copyOf(configs));
     } catch (RuntimeException e) {
       throw AgentException.badInput();
     }
+  }
+
+  private static ModelConfig parseModelConfig(JsonNode model) {
+    if (!model.isObject()) {
+      throw AgentException.badInput();
+    }
+    String type = string(model, "type", null);
+    if (!List.of("text", "text_vision").contains(type)) {
+      throw AgentException.badInput();
+    }
+    return new ModelConfig(
+        type,
+        required(model, "provider"),
+        AgentSettings.httpUri(required(model, "endpoint")),
+        required(model, "model_name"),
+        parseTemperature(model.path("temperature")),
+        required(model, "auth_token"),
+        options(model.get("chat_template_kwargs")),
+        options(model.get("thinking")));
+  }
+
+  private static double parseTemperature(JsonNode temp) {
+    if (temp.isMissingNode()) {
+      return .1;
+    }
+    if (!temp.isNumber() && !temp.isTextual()) {
+      throw AgentException.badInput();
+    }
+    double temperature = Double.parseDouble(temp.asText());
+    if (!Double.isFinite(temperature)) {
+      throw AgentException.badInput();
+    }
+    return temperature;
   }
 
   ModelConfig select(String type) {

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,47 +62,7 @@ final class ModelFailureDetails {
       causes.add(next);
       next = next.getCause();
     }
-    String kind = status != null && (status < 200 || status >= 300) ? "http_error" : null;
-    if (kind == null) {
-      for (Throwable cause : causes) {
-        String name = cause.getClass().getSimpleName();
-        if (cause instanceof UnknownHostException) {
-          kind = "dns_error"; break;
-        }
-        if (name.equals("ConnectTimeoutException")) {
-          kind = "connect_timeout"; break;
-        }
-        if (cause instanceof SSLException || name.contains("SslHandshake")) {
-          kind = "tls_error"; break;
-        }
-        if (cause instanceof ConnectException) {
-          kind = "connect_error"; break;
-        }
-        if (cause instanceof TimeoutException || name.equals("ReadTimeoutException")) {
-          kind = "timeout"; break;
-        }
-      }
-    }
-    if (kind == null && error instanceof AgentException) {
-      kind = switch (error.getMessage()) {
-        case "回答因长度限制未完整生成" -> "length_truncated";
-        case "模型请求调用工具，当前流程不支持，回答未完成" -> "unsupported_tool_call";
-        case "模型返回未知结束原因，回答未完成" -> "unknown_finish_reason";
-        case "模型流式响应中断，未收到结束标记" -> "stream_incomplete";
-        case "模型响应message.content为空" -> "empty_response";
-        case "模型回答被内容过滤" -> "content_filter";
-        case "模型服务返回业务错误", "模型服务返回流式错误" -> "upstream_error";
-        default -> "invalid_response";
-      };
-    }
-    if (kind == null && causes.stream().anyMatch(c ->
-        c instanceof com.fasterxml.jackson.core.JacksonException
-            || c instanceof IllegalArgumentException)) {
-      kind = "invalid_response";
-    }
-    if (kind == null) {
-      kind = status == null ? "request_error" : "response_error";
-    }
+    String kind = classifyFailureKind(error, causes);
     Map<String, Object> fields = new LinkedHashMap<>();
     fields.put("http_status", status);
     fields.put("content_type", contentType);
@@ -121,6 +82,63 @@ final class ModelFailureDetails {
     // Only application-authored messages are safe to publish; raw upstream exceptions may embed secrets.
     fields.put("reason", error instanceof AgentException ? error.getMessage() : "模型调用异常");
     return fields;
+  }
+
+  private String classifyFailureKind(Throwable error, List<Throwable> causes) {
+    if (status != null && (status < 200 || status >= 300)) {
+      return "http_error";
+    }
+    for (Throwable cause : causes) {
+      String kind = classifyByCause(cause);
+      if (kind != null) {
+        return kind;
+      }
+    }
+    if (error instanceof AgentException ae) {
+      return classifyAgentException(ae);
+    }
+    if (causes.stream().anyMatch(ModelFailureDetails::isParsingError)) {
+      return "invalid_response";
+    }
+    return status == null ? "request_error" : "response_error";
+  }
+
+  private static String classifyByCause(Throwable cause) {
+    String name = cause.getClass().getSimpleName();
+    if (cause instanceof UnknownHostException) {
+      return "dns_error";
+    }
+    if (name.equals("ConnectTimeoutException")) {
+      return "connect_timeout";
+    }
+    if (cause instanceof SSLException || name.contains("SslHandshake")) {
+      return "tls_error";
+    }
+    if (cause instanceof ConnectException) {
+      return "connect_error";
+    }
+    if (cause instanceof TimeoutException || name.equals("ReadTimeoutException")) {
+      return "timeout";
+    }
+    return null;
+  }
+
+  private static String classifyAgentException(AgentException error) {
+    return switch (error.getMessage()) {
+      case "回答因长度限制未完整生成" -> "length_truncated";
+      case "模型请求调用工具，当前流程不支持，回答未完成" -> "unsupported_tool_call";
+      case "模型返回未知结束原因，回答未完成" -> "unknown_finish_reason";
+      case "模型流式响应中断，未收到结束标记" -> "stream_incomplete";
+      case "模型响应message.content为空" -> "empty_response";
+      case "模型回答被内容过滤" -> "content_filter";
+      case "模型服务返回业务错误", "模型服务返回流式错误" -> "upstream_error";
+      default -> "invalid_response";
+    };
+  }
+
+  private static boolean isParsingError(Throwable cause) {
+    return cause instanceof com.fasterxml.jackson.core.JacksonException
+        || cause instanceof IllegalArgumentException;
   }
 
   private static String bounded(String value) {
