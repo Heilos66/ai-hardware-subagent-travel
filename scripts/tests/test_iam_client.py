@@ -1,3 +1,4 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 """Local wire-level tests; requires the official SDK, never real cloud credentials."""
 
 import contextlib

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 # Local workflow timing and diagnostics verification. Compatible with macOS Bash 3.2.
 set -euo pipefail
 
 TRAVEL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$TRAVEL_ROOT"
 
+# Print help text to stdout.
 usage() {
   cat <<'HELP'
 用法：./scripts/verify_logs.sh <命令> [参数]
@@ -47,12 +49,15 @@ Maven：沿用 MAVEN_USER_HOME；可用 MAVEN_REPO_LOCAL 指定依赖缓存目�
 HELP
 }
 
+# Print message to stderr and exit 1.
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
+# Ensure Python 3 is available; abort if missing.
 require_python() {
   command -v python3 >/dev/null 2>&1 || die '需要 Python 3，请先安装。'
 }
 
+# Locate a JDK 21 among JAVA_HOME, macOS java_home, PATH, and cached downloads; export JAVA_HOME.
 select_java() {
   local candidate version detected_home
   local candidates=()
@@ -72,6 +77,7 @@ select_java() {
   for candidate in ${candidates[@]+"${candidates[@]}"}; do
     [[ -x "$candidate" ]] || continue
     version="$("$candidate" -version 2>&1)" || continue
+    # Match JDK 21 major version (e.g. "21", "21.0.5", "21-ea", "21+9").
     if [[ "$version" =~ version\ \"21[.\"+-] ]]; then
       detected_home="$("$candidate" -XshowSettings:properties -version 2>&1 |
         sed -n 's/^[[:space:]]*java.home = //p')"
@@ -83,6 +89,7 @@ select_java() {
   die '未找到可用的 JDK 21。请设置 JAVA_HOME 为 JDK 21 的目录后重试。'
 }
 
+# Resolve and validate a port number from arg or TRAVEL_LOG_PORT (default 8081).
 port_for() {
   local requested="${1:-${TRAVEL_LOG_PORT:-8081}}"
   [[ "$requested" =~ ^[0-9]{1,5}$ ]] || die '端口必须是 1～65535 的整数。'
@@ -121,7 +128,7 @@ case "$command_name" in
     ;;
   capabilities|request)
     require_python
-    if [[ "$command_name" == capabilities ]]; then
+    if [[ "$command_name" = capabilities ]]; then
       (( $# <= 1 )) || die '用法：verify_logs.sh capabilities [端口]'
       python3 scripts/test_io_spec.py --port "$(port_for "${1:-}")" --capabilities
     else

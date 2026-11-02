@@ -51,7 +51,7 @@ final class RagFlowClient {
                         .retryWhen(
                             Retry.backoff(settings.retries(), Duration.ofMillis(100))
                                 .maxBackoff(Duration.ofMillis(500))
-                                .jitter(0)
+                                .jitter(0.2)
                                 .filter(error -> error instanceof RetryableStatus
                                     || error instanceof WebClientRequestException)
                                 .onRetryExhaustedThrow((spec, signal) -> signal.failure()))

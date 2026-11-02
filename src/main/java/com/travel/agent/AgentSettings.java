@@ -77,7 +77,7 @@ public final class AgentSettings {
     ragflowLogContent = bool(env, "RAGFLOW_LOG_CONTENT", false);
     modelLogRequest = bool(env, "MODEL_LOG_REQUEST", false);
     diagnosticLogMaxChars = integer(env, "DIAGNOSTIC_LOG_MAX_CHARS", 16000, 256, 65536);
-    classifierUrl = url(env, "CLASSIFIER_URL", "http://1.95.152.66:16000/mobilenetv3large");
+    classifierUrl = url(env, "CLASSIFIER_URL", "");
     classifierKey = value(env, "CLASSIFIER_API_KEY", "");
     maxRequestBytes = integer(env, "MAX_REQUEST_BYTES", 16 * 1024 * 1024, Integer.MAX_VALUE);
     maxImageBytes = integer(env, "MAX_IMAGE_BYTES", 10 * 1024 * 1024, Integer.MAX_VALUE);

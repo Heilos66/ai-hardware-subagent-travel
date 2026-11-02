@@ -63,7 +63,7 @@ class WorkflowTimingTest extends AgentTestSupport {
   @Test
   void defaultClassifierAndRagflowSettings() {
     var config = new AgentSettings(new MockEnvironment());
-    assertThat(config.classifierUrl).isEqualTo("http://1.95.152.66:16000/mobilenetv3large");
+    assertThat(config.classifierUrl).isEqualTo("");
     assertThat(config.classifierThreshold).isEqualTo(.7);
     assertThat(config.ragflow).isNotNull();
     assertThat(config.ragflow.enabled()).isTrue();

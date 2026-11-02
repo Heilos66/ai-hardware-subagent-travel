@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 """Send references/io_spec.md's JSON body to the local Agent without printing credentials."""
 
 import argparse
@@ -69,20 +70,29 @@ def main() -> int:
     business_error = False
     finished = False
     ended = False
+    size = 0
+    sse_limit = 16 * 1024 * 1024
     try:
         with opener.open(request, timeout=150) as response:
             print(
                 f"HTTP {response.status} · {response.headers.get('Content-Type', '')}", flush=True
             )
             for raw in response:
+                size += len(raw)
+                if size > sse_limit:
+                    print("SSE 响应过大，已中止。", file=sys.stderr)
+                    return 1
                 line = raw.decode("utf-8")
                 print(line, end="", flush=True)
                 if not line.startswith("data:"):
                     continue
                 frame = json.loads(line.removeprefix("data:").strip())
                 if frame.get("event") == "workflow_finished":
-                    result = json.loads(frame["data"]["outputs"]["responseContent"])
-                    business_error = "code" in result and str(result["code"]) != "0"
+                    data = frame["data"]
+                    result = json.loads(data["outputs"]["responseContent"])
+                    business_error = str(data.get("status", {}).get("code")) != "1"
+                    if "code" in result:
+                        business_error |= str(result["code"]) != "0"
                     finished = True
                 if frame.get("event") == "end":
                     ended = True

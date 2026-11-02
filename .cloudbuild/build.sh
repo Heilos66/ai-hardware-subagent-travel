@@ -1,6 +1,12 @@
-#!/bin/sh
+#!/bin/bash
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 # Test, package, and build Docker image.
 set -eu
+
+cleanup() {
+  rm -f jdk.tar.gz
+}
+trap cleanup EXIT
 
 TRAVEL_BUILD_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$TRAVEL_BUILD_ROOT"
@@ -26,6 +32,10 @@ docker info --format 'build_environment docker_server={{.ServerVersion}}'
 
 set -- -B -ntp clean verify -Dmaven.test.failure.ignore=true
 if [ -n "${MAVEN_REPO_LOCAL:-}" ]; then
+  if [ ! -d "$MAVEN_REPO_LOCAL" ]; then
+    printf 'MAVEN_REPO_LOCAL does not point to a directory.\n' >&2
+    exit 2
+  fi
   set -- "$@" "-Dmaven.repo.local=$MAVEN_REPO_LOCAL"
 fi
 if [ -n "${TRAVEL_MAVEN_SETTINGS:-}" ]; then
@@ -33,7 +43,8 @@ if [ -n "${TRAVEL_MAVEN_SETTINGS:-}" ]; then
     printf 'TRAVEL_MAVEN_SETTINGS does not point to a file.\n' >&2
     exit 2
   fi
-  set -- "$@" -s "$TRAVEL_MAVEN_SETTINGS"
+  settings_path=$(cd -- "$(dirname -- "$TRAVEL_MAVEN_SETTINGS")" && pwd)/$(basename -- "$TRAVEL_MAVEN_SETTINGS")
+  set -- "$@" -s "$settings_path"
 fi
 mvn "$@"
 

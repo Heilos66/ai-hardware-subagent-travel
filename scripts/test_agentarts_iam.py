@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 """Invoke an IAM AgentArts runtime with Huawei's official V11 signer and SSE."""
 
 import argparse

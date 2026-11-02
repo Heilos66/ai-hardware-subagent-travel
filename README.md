@@ -1,6 +1,6 @@
 # 文旅 Agent
 
-Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9（WebFlux），部署到 AgentArts 高代码运行时，不依赖巫山框架。
+Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.7（WebFlux），部署到 AgentArts 高代码运行时，不依赖巫山框架。
 
 保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索默认使用 RAGFlow，接入文档中的 travel_kb，通过 `RAGFLOW_URL` 配置私网或公网地址。测试时可设 `RAGFLOW_ENABLED=false`，跳过检索并以空资料继续模型调用。
 
