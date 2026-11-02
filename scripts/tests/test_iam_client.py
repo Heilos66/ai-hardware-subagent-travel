@@ -45,6 +45,7 @@ def finish(result=None, status=1):
 
 
 class Gateway(BaseHTTPRequestHandler):
+    """Local gateway emulating the signed AgentArts runtime for wire-level tests."""
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *args):
@@ -84,12 +85,17 @@ class Gateway(BaseHTTPRequestHandler):
 
 
 class IAMTests(unittest.TestCase):
+    """Wire-level IAM signing tests against a local gateway."""
     @classmethod
     def setUpClass(cls):
+        """Load the official signer once for all tests."""
+        super().setUpClass()
         sdk_dir = os.getenv("APIG_SDK_PATH")
         cls.signer = client.load_signer(Path(sdk_dir) if sdk_dir else None)
 
     def setUp(self):
+        """Start a local gateway server on an ephemeral port."""
+        super().setUp()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Gateway)
         self.server.signer = self.signer
         self.server.status = None

@@ -209,7 +209,7 @@ run_maven() {
   if [[ -n "${MAVEN_REPO_LOCAL:-}" ]]; then
     maven_args+=("-Dmaven.repo.local=$MAVEN_REPO_LOCAL")
   fi
-  if [[ "$command_name" == test ]]; then
+  if [[ "$command_name" = test ]]; then
     ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest,WorkflowDiagnosticsTest "$@" test
   else
     ./mvnw "${maven_args[@]}" -DskipTests "$@" package

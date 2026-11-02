@@ -1,3 +1,4 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 """Local IO CLI contract checks; no external service or credentials required."""
 
 import contextlib
@@ -14,6 +15,7 @@ import test_io_spec as client
 
 
 class IOClientTests(unittest.TestCase):
+    """IO client contract checks; no external service or credentials required."""
     def test_check_reads_request_without_sending_or_printing_it(self):
         body = {"inputs": {"model_config": [{"auth_token": "test-secret-only"}]}}
         with tempfile.TemporaryDirectory() as tmp:

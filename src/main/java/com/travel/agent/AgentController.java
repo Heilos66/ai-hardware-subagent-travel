@@ -1,3 +1,4 @@
+// Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 package com.travel.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;

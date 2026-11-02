@@ -17,15 +17,16 @@ import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, Optional
-from pathlib import Path
 
 from test_io_spec import read_request
 
 
 @dataclass(frozen=True)
 class SigningContext:
+    """Immutable context holding region, session id and credentials for V11 signing."""
     region: str
     session_id: str
     ak: str = field(repr=False)
@@ -33,6 +34,7 @@ class SigningContext:
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Block redirects so signed requests never forward credentials."""
     def redirect_request(
         self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
     ) -> None:

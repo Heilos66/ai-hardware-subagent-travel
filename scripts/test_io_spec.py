@@ -3,6 +3,7 @@
 """Send references/io_spec.md's JSON body to the local Agent without printing credentials."""
 
 import argparse
+import http.client
 import json
 import re
 import sys
@@ -96,7 +97,7 @@ def invoke(body: dict, port: int, capabilities: bool) -> int:
         return 1
 
 
-def consume_sse(response) -> int:
+def consume_sse(response: http.client.HTTPResponse) -> int:
     business_error = False
     finished = False
     ended = False

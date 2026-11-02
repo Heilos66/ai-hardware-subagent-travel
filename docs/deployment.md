@@ -1,6 +1,6 @@
 # AgentArts 部署
 
-本项目使用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.9，通过自定义 ARM64 镜像部署。启动命令由 Dockerfile 提供，容器以 UID 10001 运行，监听 `0.0.0.0:8080`，健康接口为 `GET /ping`。不需要 Python AgentArts SDK。[Java 迁移说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_223.html)、[HTTP 入站协议](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_070.html)
+本项目使用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.7，通过自定义 ARM64 镜像部署。启动命令由 Dockerfile 提供，容器以 UID 10001 运行，监听 `0.0.0.0:8080`，健康接口为 `GET /ping`。不需要 Python AgentArts SDK。[Java 迁移说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_223.html)、[HTTP 入站协议](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_070.html)
 
 ## 构建、验证和推送 SWR
 
