@@ -295,21 +295,44 @@ class RagFlowIntegrationTest extends AgentTestSupport {
     assertThat(cancelled).isTrue();
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void downstreamCancellationStopsClassification(boolean fallbackEnabled) {
+    AtomicInteger attempts = new AtomicInteger();
+    AtomicBoolean cancelled = new AtomicBoolean();
+    WebClient client = WebClient.builder().exchangeFunction(request -> {
+      attempts.incrementAndGet();
+      return Mono.<ClientResponse>never().doOnCancel(() -> cancelled.set(true));
+    }).build();
+    var config = ragflow(Map.of(
+        "CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", Boolean.toString(fallbackEnabled)));
+    var image = new ImageInput("https://image.test/exhibit.jpg", "", "image/jpeg");
+    var classification = new ExternalServices(client, config).classify(image);
+    assertThat(attempts.get()).isZero();
+    StepVerifier.create(classification)
+        .expectSubscription().thenAwait(Duration.ofMillis(10))
+        .thenCancel().verify(Duration.ofSeconds(2));
+    assertThat(attempts.get()).isEqualTo(1);
+    assertThat(cancelled).isTrue();
+  }
+
   @Test
-  void mountedTokenIsReReadOnEachSearch(@TempDir Path directory) throws Exception {
+  void mountedTokenIsReReadOnEachSubscription(@TempDir Path directory) throws Exception {
     Path token = directory.resolve("token");
     handler = this::retrievalOrDefault;
     var config = ragflow(Map.of("RAGFLOW_API_TOKEN_FILE", token.toString()));
     var services = new ExternalServices(http, config);
+    var search = services.search("问题");
+    assertThat(requests).isEmpty();
     Files.writeString(token, "first-token\n");
-    services.search("问题").block(Duration.ofSeconds(2));
+    search.block(Duration.ofSeconds(2));
     Files.writeString(token, "rotated-token\n");
-    services.search("问题").block(Duration.ofSeconds(2));
+    search.block(Duration.ofSeconds(2));
     assertThat(requests.getFirst().headers()).containsEntry("authorization", "Bearer first-token");
     assertThat(requests.getLast().headers()).containsEntry("authorization", "Bearer rotated-token");
     assertThat(config.ragflow.toString()).doesNotContain("ragflow-secret", token.toString());
     Files.delete(token);
-    assertThatThrownBy(() -> services.search("问题").block(Duration.ofSeconds(2)))
+    assertThatThrownBy(() -> search.block(Duration.ofSeconds(2)))
         .isInstanceOf(AgentException.class).hasMessage("RAGFlow Token文件不可读取");
     assertThat(requests).hasSize(2);
   }

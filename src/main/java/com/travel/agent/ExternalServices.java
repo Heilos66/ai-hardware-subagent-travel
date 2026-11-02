@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 final class ExternalServices {
   enum ClassificationStatus {
@@ -45,32 +47,42 @@ final class ExternalServices {
   }
 
   Mono<Classification> classify(ImageInput image) {
-    return Mono.deferContextual(context -> Mono.defer(() -> {
-      String key = settings.classifierKey.strip();
-      if (settings.classifierUrl.isBlank()) {
-        return Mono.<Classification>error(new ClassifierFailure("E5004", "configuration", false,
-            "图片分类服务地址未配置：CLASSIFIER_URL"));
-      }
-      if (key.isEmpty() || key.startsWith("E1-") || key.startsWith("${")
-          || key.chars().anyMatch(Character::isISOControl)) {
-        return Mono.<Classification>error(new ClassifierFailure("E5004", "configuration", false,
-            "图片分类服务密钥未配置或仍为平台加密值"));
-      }
-      Map<String, String> body = Map.of("image_url", image.url(), "image_base64", image.base64());
-      return postClassifier(key, body).map(ExternalServices::parseClassification)
-          .map(result -> new Classification(result.name(), result.confidence(),
-              result.confidence() >= settings.classifierThreshold
-                  ? ClassificationStatus.RECOGNIZED : ClassificationStatus.UNRECOGNIZED));
-    }).onErrorResume(error -> {
-      ClassifierFailure failure = classifyFailure(error);
-      boolean fallback =
-          failure.transientFailure && settings.isClassifierFallbackOnTransientErrorEnabled;
-      new WorkflowDiagnostics(settings).classifierFailure(context, failure.code, failure.kind,
-          failure.getMessage(), fallback);
-      return fallback
-          ? Mono.just(new Classification("", 0, ClassificationStatus.SERVICE_FAILED))
-          : Mono.error(new AgentException(failure.code, failure.getMessage()));
-    }));
+    return Mono.deferContextual(context -> Mono.defer(() -> requestClassification(image))
+        .onErrorResume(error -> handleClassifierFailure(context, error)));
+  }
+
+  private Mono<Classification> requestClassification(ImageInput image) {
+    String key = settings.classifierKey.strip();
+    if (settings.classifierUrl.isBlank()) {
+      throw new ClassifierFailure("E5004", "configuration", false,
+          "图片分类服务地址未配置：CLASSIFIER_URL");
+    }
+    if (key.isEmpty() || key.startsWith("E1-") || key.startsWith("${")
+        || key.chars().anyMatch(Character::isISOControl)) {
+      throw new ClassifierFailure("E5004", "configuration", false,
+          "图片分类服务密钥未配置或仍为平台加密值");
+    }
+    Map<String, String> body = Map.of("image_url", image.url(), "image_base64", image.base64());
+    return postClassifier(key, body)
+        .map(ExternalServices::parseClassification)
+        .map(this::applyClassifierThreshold);
+  }
+
+  private Classification applyClassifierThreshold(Classification result) {
+    return new Classification(result.name(), result.confidence(),
+        result.confidence() >= settings.classifierThreshold
+            ? ClassificationStatus.RECOGNIZED : ClassificationStatus.UNRECOGNIZED);
+  }
+
+  private Mono<Classification> handleClassifierFailure(ContextView context, Throwable error) {
+    ClassifierFailure failure = classifyFailure(error);
+    boolean fallback =
+        failure.transientFailure && settings.isClassifierFallbackOnTransientErrorEnabled;
+    new WorkflowDiagnostics(settings).classifierFailure(context, failure.code, failure.kind,
+        failure.getMessage(), fallback);
+    return fallback
+        ? Mono.just(new Classification("", 0, ClassificationStatus.SERVICE_FAILED))
+        : Mono.error(new AgentException(failure.code, failure.getMessage()));
   }
 
   private static ClassifierFailure classifyFailure(Throwable error) {
@@ -142,34 +154,35 @@ final class ExternalServices {
         .contentType(MediaType.APPLICATION_JSON)
         .header("X-API-Key", key)
         .bodyValue(body)
-        .exchangeToMono(
-            response -> {
-              int status = response.statusCode().value();
-              if (!response.statusCode().is2xxSuccessful()) {
-                String code = status == 401 ? "401" : status >= 400 && status < 500 ? "400" : "500";
-                return Mono.error(
-                    new ClassifierFailure(
-                        code,
-                        status == 401 || status == 403 ? "authentication" : "http_error",
-                        status >= 500 && status <= 599,
-                        "图片分类服务返回HTTP " + status));
-              }
-              return response
-                  .bodyToMono(byte[].class)
-                  .defaultIfEmpty(new byte[0])
-                  .map(
-                      bytes -> {
-                        try {
-                          JsonNode result = Json.parse(bytes);
-                          if (result == null || !result.isObject()) {
-                            throw new IllegalArgumentException();
-                          }
-                          return result;
-                        } catch (IllegalArgumentException e) {
-                          throw new AgentException("500", "图片分类服务响应格式错误");
-                        }
-                      });
-            })
+        .exchangeToMono(ExternalServices::readClassifierResponse)
         .timeout(settings.classifierTimeout);
+  }
+
+  private static Mono<JsonNode> readClassifierResponse(ClientResponse response) {
+    int status = response.statusCode().value();
+    if (!response.statusCode().is2xxSuccessful()) {
+      String code = status == 401 ? "401" : status >= 400 && status < 500 ? "400" : "500";
+      return Mono.error(
+          new ClassifierFailure(
+              code,
+              status == 401 || status == 403 ? "authentication" : "http_error",
+              status >= 500 && status <= 599,
+              "图片分类服务返回HTTP " + status));
+    }
+    return response.bodyToMono(byte[].class)
+        .defaultIfEmpty(new byte[0])
+        .map(ExternalServices::parseClassifierBody);
+  }
+
+  private static JsonNode parseClassifierBody(byte[] bytes) {
+    try {
+      JsonNode result = Json.parse(bytes);
+      if (result == null || !result.isObject()) {
+        throw new IllegalArgumentException();
+      }
+      return result;
+    } catch (IllegalArgumentException e) {
+      throw new AgentException("500", "图片分类服务响应格式错误");
+    }
   }
 }

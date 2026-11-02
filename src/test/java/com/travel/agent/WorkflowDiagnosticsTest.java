@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
+import reactor.util.context.Context;
 
 class WorkflowDiagnosticsTest extends AgentTestSupport {
   record Diagnostic(String executionId, String event, boolean truncated, JsonNode data) {}
@@ -402,6 +403,31 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
     assertThat(event("ragflow_result").data().path("attempts").asInt()).isEqualTo(3);
     assertThat(diagnostics()).extracting(Diagnostic::event)
         .containsExactly("ragflow_result", "model_request");
+  }
+
+  @Test
+  void reusedSearchKeepsAttemptsAndDiagnosticsIndependentPerSubscription() {
+    AtomicInteger attempts = new AtomicInteger();
+    handler = request -> attempts.incrementAndGet() % 2 == 1
+        ? new Reply(503, "application/json", Flux.just("private-upstream-error")) : success(request);
+    var search = new ExternalServices(http, settings()).search("介绍这个展品");
+    assertThat(requests).isEmpty();
+    assertThat(logs).isEmpty();
+
+    String firstId = "11111111-1111-4111-8111-111111111111";
+    String secondId = "22222222-2222-4222-8222-222222222222";
+    search.contextWrite(Context.of(WorkflowDiagnostics.EXECUTION_ID, firstId))
+        .block(Duration.ofSeconds(2));
+    search.contextWrite(Context.of(WorkflowDiagnostics.EXECUTION_ID, secondId))
+        .block(Duration.ofSeconds(2));
+
+    assertThat(requests).hasSize(4);
+    assertThat(diagnostics()).extracting(Diagnostic::executionId).containsExactly(firstId, secondId);
+    assertThat(diagnostics()).allSatisfy(log -> {
+      assertThat(log.event()).isEqualTo("ragflow_result");
+      assertThat(log.data().path("attempts").asInt()).isEqualTo(2);
+    });
+    assertThat(logs.toString()).doesNotContain("private-upstream-error", "search-secret");
   }
 
   @ParameterizedTest

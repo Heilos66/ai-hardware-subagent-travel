@@ -11,10 +11,12 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.context.ContextView;
 import reactor.util.retry.Retry;
 
 /** RAGFlow retrieval only; preserves cancellation and never exposes upstream error bodies. */
@@ -32,41 +34,51 @@ final class RagFlowClient {
   }
 
   Mono<List<ExternalServices.KnowledgeChunk>> search(String query) {
-    return Mono.deferContextual(context -> {
-      if (!settings.enabled()) {
-        diagnostics.retrievalSkipped(context);
-        return Mono.just(List.of());
-      }
-      AtomicInteger attempts = new AtomicInteger();
-      return Mono.defer(
-              () -> {
-                validateSearchConfig(query);
-                Map<String, Object> body = buildSearchBody(query);
-                // Leave keyword/vector weights at server defaults; keyword=false is not vector-only.
-                return token().flatMap(token ->
-                    Mono.defer(() -> {
-                      attempts.incrementAndGet();
-                      return request(body, token);
-                    })
-                        .retryWhen(
-                            Retry.backoff(settings.retries(), Duration.ofMillis(100))
-                                .maxBackoff(Duration.ofMillis(500))
-                                .jitter(0.2)
-                                .filter(error -> error instanceof RetryableStatus
-                                    || error instanceof WebClientRequestException)
-                                .onRetryExhaustedThrow((spec, signal) -> signal.failure()))
-                        .map(response -> {
-                          var chunks = chunks(response);
-                          diagnostics.retrievalResult(context, query, response.path("data").path("chunks"),
-                              chunks, attempts.get(), token);
-                          return chunks;
-                        }));
-              })
-          // One deadline covers credential loading, all attempts, and retry delays.
-          .timeout(settings.timeout())
-          .onErrorMap(this::mapSearchError)
-          .doOnError(error -> diagnostics.retrievalFailure(context, attempts.get(), error));
-    });
+    return Mono.deferContextual(context -> search(query, context));
+  }
+
+  private Mono<List<ExternalServices.KnowledgeChunk>> search(String query, ContextView context) {
+    if (!settings.enabled()) {
+      diagnostics.retrievalSkipped(context);
+      return Mono.just(List.of());
+    }
+    AtomicInteger attempts = new AtomicInteger();
+    return Mono.defer(() -> retrieve(query, context, attempts))
+        // One deadline covers credential loading, all attempts, and retry delays.
+        .timeout(settings.timeout())
+        .onErrorMap(this::mapSearchError)
+        .doOnError(error -> diagnostics.retrievalFailure(context, attempts.get(), error));
+  }
+
+  private Mono<List<ExternalServices.KnowledgeChunk>> retrieve(
+      String query, ContextView context, AtomicInteger attempts) {
+    validateSearchConfig(query);
+    Map<String, Object> body = buildSearchBody(query);
+    // Read credentials once per search subscription, outside HTTP retries.
+    return token().flatMap(token -> requestWithRetry(body, token, attempts)
+        .map(response -> readSearchResult(response, query, context, attempts.get(), token)));
+  }
+
+  private Mono<JsonNode> requestWithRetry(
+      Map<String, Object> body, String token, AtomicInteger attempts) {
+    return Mono.defer(() -> {
+      attempts.incrementAndGet();
+      return request(body, token);
+    }).retryWhen(
+        Retry.backoff(settings.retries(), Duration.ofMillis(100))
+            .maxBackoff(Duration.ofMillis(500))
+            .jitter(0.2)
+            .filter(error -> error instanceof RetryableStatus
+                || error instanceof WebClientRequestException)
+            .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
+  }
+
+  private List<ExternalServices.KnowledgeChunk> readSearchResult(
+      JsonNode response, String query, ContextView context, int attempts, String token) {
+    var chunks = chunks(response);
+    diagnostics.retrievalResult(context, query, response.path("data").path("chunks"),
+        chunks, attempts, token);
+    return chunks;
   }
 
   private void validateSearchConfig(String query) {
@@ -85,6 +97,7 @@ final class RagFlowClient {
   }
 
   private Map<String, Object> buildSearchBody(String query) {
+    // Leave keyword/vector weights at server defaults; keyword=false is not vector-only.
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("dataset_ids", List.of(settings.datasetId()));
     body.put("question", query);
@@ -124,18 +137,19 @@ final class RagFlowClient {
             : Mono.fromCallable(() -> Files.readString(Path.of(settings.tokenFile())))
                 .subscribeOn(Schedulers.boundedElastic())
                 .onErrorMap(error -> new AgentException("E5004", "RAGFlow Token文件不可读取"));
-    return source.map(
-        value -> {
-          value = value.strip();
-          if (value.isEmpty()
-              || value.startsWith("E1-")
-              || value.startsWith("${")
-              || value.chars().anyMatch(Character::isWhitespace)
-              || value.chars().anyMatch(Character::isISOControl)) {
-            throw new AgentException("E5004", "RAGFlow Token未配置或格式错误");
-          }
-          return value;
-        });
+    return source.map(RagFlowClient::validateToken);
+  }
+
+  private static String validateToken(String value) {
+    String token = value.strip();
+    if (token.isEmpty()
+        || token.startsWith("E1-")
+        || token.startsWith("${")
+        || token.chars().anyMatch(Character::isWhitespace)
+        || token.chars().anyMatch(Character::isISOControl)) {
+      throw new AgentException("E5004", "RAGFlow Token未配置或格式错误");
+    }
+    return token;
   }
 
   private Mono<JsonNode> request(Map<String, Object> body, String token) {
@@ -145,19 +159,19 @@ final class RagFlowClient {
         .accept(MediaType.APPLICATION_JSON)
         .headers(headers -> headers.setBearerAuth(token))
         .bodyValue(body)
-        .exchangeToMono(
-            response -> {
-              int status = response.statusCode().value();
-              if (status == 408 || status == 429 || status >= 500) {
-                return Mono.error(new RetryableStatus(status));
-              }
-              if (!response.statusCode().is2xxSuccessful()) {
-                return Mono.error(httpError(status));
-              }
-              return response
-                  .bodyToMono(JsonNode.class)
-                  .switchIfEmpty(Mono.error(new AgentException("E5002", "RAGFlow检索响应为空")));
-            });
+        .exchangeToMono(RagFlowClient::readResponse);
+  }
+
+  private static Mono<JsonNode> readResponse(ClientResponse response) {
+    int status = response.statusCode().value();
+    if (status == 408 || status == 429 || status >= 500) {
+      return Mono.error(new RetryableStatus(status));
+    }
+    if (!response.statusCode().is2xxSuccessful()) {
+      return Mono.error(httpError(status));
+    }
+    return response.bodyToMono(JsonNode.class)
+        .switchIfEmpty(Mono.error(new AgentException("E5002", "RAGFlow检索响应为空")));
   }
 
   private List<ExternalServices.KnowledgeChunk> chunks(JsonNode body) {
