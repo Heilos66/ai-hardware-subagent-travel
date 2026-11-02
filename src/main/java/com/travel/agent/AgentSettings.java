@@ -100,8 +100,11 @@ public final class AgentSettings {
     workflowName = value(env, "WORKFLOW_NAME", "文旅逛展");
   }
 
-  static boolean validId(String value) {
-    return value.matches("[A-Za-z0-9_-]{1,64}");
+  private static final java.util.regex.Pattern VALID_ID =
+      java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
+  static final boolean validId(String value) {
+    return VALID_ID.matcher(value).matches();
   }
 
   static URI httpUri(String value) {

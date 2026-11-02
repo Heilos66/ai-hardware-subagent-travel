@@ -34,7 +34,7 @@ record ImageInput(String url, String base64, String mime) {
     try {
       uri = AgentSettings.httpUri(url);
     } catch (IllegalArgumentException e) {
-      throw new AgentException("400", "图片地址必须是有效的HTTP或HTTPS链接");
+      throw new AgentException("400", "图片地址必须是有效的HTTP或HTTPS链接", e);
     }
     String path = uri.getPath().toLowerCase(Locale.ROOT);
     String mime = path.endsWith(".png") ? "image/png" : "image/jpeg";
@@ -44,9 +44,11 @@ record ImageInput(String url, String base64, String mime) {
     return new ImageInput(url, "", mime);
   }
 
+  private static final java.util.regex.Pattern WHITESPACE = java.util.regex.Pattern.compile("(?U)\\s");
+
   private static ImageInput decodeBase64(String encoded, int maxBytes) {
     encoded = stripDataUriPrefix(encoded);
-    encoded = encoded.replaceAll("(?U)\\s", "").replace('-', '+').replace('_', '/');
+    encoded = WHITESPACE.matcher(encoded).replaceAll("").replace('-', '+').replace('_', '/');
     if (encoded.length() > 4L * ((maxBytes + 2L) / 3)) {
       throw new AgentException("400", "图片大小超限");
     }
@@ -54,7 +56,7 @@ record ImageInput(String url, String base64, String mime) {
     try {
       decoded = Base64.getDecoder().decode(encoded);
     } catch (IllegalArgumentException e) {
-      throw new AgentException("400", "Base64图片数据无效");
+      throw new AgentException("400", "Base64图片数据无效", e);
     }
     if (decoded.length == 0) {
       throw new AgentException("400", "Base64图片数据无效");

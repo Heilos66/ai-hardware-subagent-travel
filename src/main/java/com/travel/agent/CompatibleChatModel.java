@@ -199,13 +199,16 @@ final class CompatibleChatModel implements ChatModel {
 
   private record RequestTarget(URI endpoint, Object body) {}
 
+  private static final java.util.regex.Pattern TRAILING_SLASH = java.util.regex.Pattern.compile("/+$");
+  private static final java.util.regex.Pattern MODEL_NAME = java.util.regex.Pattern.compile("[A-Za-z0-9._-]+");
+
   static URI proxyEndpoint(Inputs.ModelConfig config) {
     URI uri = config.endpoint();
-    String path = uri.getRawPath().replaceAll("/+$", "");
+    String path = TRAILING_SLASH.matcher(uri.getRawPath()).replaceAll("");
     if (path.endsWith("/invocations")) {
       path += "/stream";
     } else if (!path.endsWith("/invocations/stream")) {
-      if (!config.model().matches("[A-Za-z0-9._-]+")) {
+      if (!MODEL_NAME.matcher(config.model()).matches()) {
         throw new AgentException("400", "model_name包含不支持的字符");
       }
       path += "/runtimes/" + config.model() + "/invocations/stream";

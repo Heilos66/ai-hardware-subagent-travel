@@ -17,8 +17,8 @@ final class Json {
     try {
       return MAPPER.readTree(value);
     } catch (JsonProcessingException e) {
-      // Parser diagnostics may contain request data or credentials.
-      throw new IllegalArgumentException("Invalid JSON");
+      // Cause retained for diagnostics; callers do not log raw parser messages.
+      throw new IllegalArgumentException("Invalid JSON", e);
     }
   }
 
@@ -26,7 +26,7 @@ final class Json {
     try {
       return MAPPER.readTree(value);
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid JSON");
+      throw new IllegalArgumentException("Invalid JSON", e);
     }
   }
 
@@ -34,7 +34,7 @@ final class Json {
     try {
       return MAPPER.writeValueAsString(value);
     } catch (JsonProcessingException e) {
-      throw new IllegalArgumentException("JSON serialization failed");
+      throw new IllegalArgumentException("JSON serialization failed", e);
     }
   }
 

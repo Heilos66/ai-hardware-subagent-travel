@@ -41,7 +41,7 @@ record Inputs(
       }
       return new Inputs(query, urls, encoded, List.copyOf(configs));
     } catch (IllegalArgumentException e) {
-      throw AgentException.badInput();
+      throw AgentException.badInput(e);
     }
   }
 

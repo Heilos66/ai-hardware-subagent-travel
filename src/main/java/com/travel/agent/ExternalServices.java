@@ -32,6 +32,13 @@ final class ExternalServices {
       this.kind = kind;
       this.transientFailure = transientFailure;
     }
+
+    ClassifierFailure(String code, String kind, boolean transientFailure, String message, Throwable cause) {
+      super(message, cause);
+      this.code = code;
+      this.kind = kind;
+      this.transientFailure = transientFailure;
+    }
   }
 
   record KnowledgeChunk(String content, String title, String id, double similarity) {}
@@ -136,12 +143,16 @@ final class ExternalServices {
       }
       return confidence;
     } catch (NumberFormatException e) {
-      throw malformedClassification();
+      throw malformedClassification(e);
     }
   }
 
   private static ClassifierFailure malformedClassification() {
     return new ClassifierFailure("500", "invalid_response", false, "图片分类服务分类字段格式错误");
+  }
+
+  private static ClassifierFailure malformedClassification(Throwable cause) {
+    return new ClassifierFailure("500", "invalid_response", false, "图片分类服务分类字段格式错误", cause);
   }
 
   Mono<List<KnowledgeChunk>> search(String query) {

@@ -46,7 +46,7 @@ final class WorkflowDiagnostics {
     // The SECRETS set is a ConcurrentHashMap.newKeySet() put into context by WorkflowEvents
     // (context itself is immutable; this mutable set is the intended accumulator). Tokens read
     // from a rotating file are added here so later emits (e.g. model_request) redact them too.
-    // TODO: replace with Context.write threading to avoid mutating context-sourced state.
+    // Mutating accumulator pattern; context itself is immutable.
     try {
       context.<Set<String>>getOrEmpty(SECRETS).ifPresent(secrets -> secrets.add(token));
     } catch (RuntimeException ignored) {
