@@ -1,0 +1,46 @@
+# .cloudbuild/ConvAISubagentTravel.yml
+# 适配项目：ai-hardware-subagent-travel
+#   语言/构建：Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.7
+#   产物：target/image-artifacts/travel-agent-${CID_BUILD_TIME}.tar.gz
+#
+# 字段依据（来自 aihardware-pipeline-config skill minimal-templates.md §1，2026-10-23/26 检索）：
+#   - cloudbuild2.0 build.yml 至少含构建参数、构建环境、构建步骤三个要素（id 2090937360848048128, 3MS）
+#   - CloudBuild2.0 build.yml 配置（id 2050467288351002627, 3MS）
+#   - 构建环境 toolbox 方式说明（id 664483452494127105, itServiceCenter）
+# 本流水线运行测试、打包 JAR、构建 Docker 镜像并归档；不推送镜像仓库。
+# 执行环境须提供 JDK 21、Docker CLI 和可用的 Docker 服务（mode: toolbox）。
+
+version: '2.0'
+
+env:
+  resource:
+    type: docker
+    image: kweecr05.his.huawei.com:80/ecr-build-green202/cbu_cloudbuild_euler2.10_x86_cs8.0:cui_1.0.5
+    class: 8U16G
+    mode: toolbox
+    cache:
+      - type: maven
+
+params:
+  - name: CB_AUTO_CHECK_VERSION
+    value: '2.0'
+
+steps:
+  PRE_BUILD:
+    - codehub:
+        path: .
+        url: ${{ CID_REPO_URL }}
+        revision: ${{ CID_REPO_BRANCH }}
+
+  BUILD:
+    - build_execute:
+        command: sh .cloudbuild/build.sh
+        check:
+          auto: true
+          mode: sync
+
+  POST_BUILD:
+    - hwcloud_artifact:
+        version: '1.0'
+        package:
+          - target/image-artifacts/travel-agent-${CID_BUILD_TIME}.tar.gz

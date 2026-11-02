@@ -1,19 +1,24 @@
-# SWR Basic requires a Docker V2 manifest; avoid OCI indexes and attestations.
-# Build with: docker buildx build --platform linux/arm64 --provenance=false --sbom=false --output type=docker,oci-mediatypes=false -t travel-agent:0.2.0 .
-FROM eclipse-temurin:21-jdk-noble AS builder
-WORKDIR /build
-COPY mvnw pom.xml ./
-COPY .mvn ./.mvn
-RUN chmod +x mvnw && ./mvnw -B -DskipTests dependency:go-offline
-COPY src/main ./src/main
-RUN ./mvnw -B -DskipTests package
+# CI Dockerfile — uses Huawei internal base image + JDK from build environment.
+# Local build: run "tar -czf jdk.tar.gz -C $(dirname $JAVA_HOME) $(basename $JAVA_HOME)" first.
+ARG RUNTIME_IMAGE=registry-cbu.huawei.com/hce_docker/hce_x86_64:3.0.2606.1
+FROM ${RUNTIME_IMAGE}
 
-FROM eclipse-temurin:21-jre-noble
+# Install JDK from build context (packaged by build.sh from $JAVA_HOME)
+COPY jdk.tar.gz /tmp/jdk.tar.gz
+RUN mkdir -p /opt/jdk \
+    && tar -xzf /tmp/jdk.tar.gz -C /opt/jdk --strip-components=1 \
+    && rm /tmp/jdk.tar.gz \
+    && ln -s /opt/jdk/bin/java /usr/local/bin/java
+ENV JAVA_HOME=/opt/jdk
+ENV PATH=/opt/jdk/bin:$PATH
+
 RUN groupadd --gid 10001 agent && useradd --uid 10001 --gid agent --create-home agent
 WORKDIR /app
-COPY --from=builder --chown=agent:agent /build/target/travel-agent.jar ./app.jar
 ENV PORT=8080 JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0"
 USER agent
 EXPOSE 8080
 # AgentArts probes GET /ping; the application must be ready before it returns Healthy.
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+# CI copies the JAR produced by mvn verify; no compilation inside Docker.
+COPY --chown=agent:agent target/travel-agent.jar ./app.jar

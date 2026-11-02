@@ -1,11 +1,5 @@
 **
 !Dockerfile
-!pom.xml
-!mvnw
-!.mvn/
-!.mvn/maven.config
-!.mvn/wrapper/
-!.mvn/wrapper/**
-!src/
-!src/main/
-!src/main/**
+!jdk.tar.gz
+!target/
+!target/travel-agent.jar
