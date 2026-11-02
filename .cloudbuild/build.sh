@@ -16,12 +16,15 @@ if [ "$image_revision" != unknown ] && ! git diff --quiet HEAD --; then
   image_revision="${image_revision}-dirty"
 fi
 build_time=${CID_BUILD_TIME:-$(TZ=Asia/Shanghai date '+%Y%m%d%H%M%S')}
-image_tag="release-${build_time}"
+release_plan=${CID_BUILD_RELEASE_PLAN_PREFIX_TITLE:-unknown}
+release_plan=$(printf '%s' "$release_plan" | LC_ALL=C tr -cd 'A-Za-z0-9_.-')
+[ -n "$release_plan" ] || release_plan=unknown
+image_tag="${release_plan}_${build_time:0:8}_${build_time:8:4}_${build_time:12:2}"
 if [ "${#image_tag}" -gt 128 ] || ! printf '%s\n' "$image_tag" | LC_ALL=C grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]*$'; then
   printf 'image tag is not valid.\n' >&2
   exit 2
 fi
-image_name="travel-agent:${image_tag}"
+image_name="convai_travel_agent:${image_tag}"
 image_base=${TRAVEL_BASE_IMAGE:-registry-cbu.huawei.com/hce_docker/hce_x86_64:3.0.2606.1}
 image_created=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
@@ -67,7 +70,8 @@ docker build \
   --label "org.opencontainers.image.revision=$image_revision" \
   --label "org.opencontainers.image.created=$image_created" \
   -t "$image_name" .
-docker image save --output "$artifact_dir/travel-agent-${build_time}.tar" "$image_name"
-gzip -n "$artifact_dir/travel-agent-${build_time}.tar"
-chmod 600 "$artifact_dir/travel-agent-${build_time}.tar.gz"
-printf 'Image archive ready: %s/travel-agent-%s.tar.gz\n' "$artifact_dir" "$build_time"
+archive_name="convai_travel_agent_${release_plan}_${build_time:0:8}_${build_time:8:4}_${build_time:12:2}"
+docker image save --output "$artifact_dir/${archive_name}.tar" "$image_name"
+gzip -n "$artifact_dir/${archive_name}.tar"
+chmod 600 "$artifact_dir/${archive_name}.tar.gz"
+printf 'Image archive ready: %s/%s.tar.gz\n' "$artifact_dir" "$archive_name"

@@ -43,4 +43,4 @@ steps:
     - hwcloud_artifact:
         version: '1.0'
         package:
-          - target/image-artifacts/travel-agent-${CID_BUILD_TIME}.tar.gz
+          - target/image-artifacts/convai_travel_agent_${CID_BUILD_RELEASE_PLAN_PREFIX_TITLE}_[0-9]{8}_[0-9]{4}_[0-9]{2}.tar.gz
