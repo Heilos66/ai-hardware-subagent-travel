@@ -21,7 +21,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, Optional
 
-from test_io_spec import read_request
+from test_io_spec import read_request, SSE_SIZE_LIMIT
 
 
 @dataclass(frozen=True)
@@ -55,15 +55,16 @@ def load_signer(sdk_dir: Optional[Path]) -> ModuleType:
 
 def validate_url(url: str) -> None:
     parsed = urllib.parse.urlsplit(url)
+    has_credentials = parsed.username is not None or parsed.password is not None
+    has_control_chars = any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in url)
     if (
         parsed.scheme != "https"
         or not parsed.hostname
         or not parsed.path
-        or parsed.username is not None
-        or parsed.password is not None
+        or has_credentials
         or parsed.fragment
         or not url.isascii()
-        or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in url)
+        or has_control_chars
     ):
         raise ValueError("请使用控制台的完整 HTTPS 调用 URL，不含用户密码或片段；特殊字符须 URL 编码")
     # Trigger validation of a malformed port before attempting a connection.
@@ -93,7 +94,9 @@ def signed_request(
         req.headers["Authorization"] = auth[:-1] + replacement
     # HttpRequest.uri contains ONLY the path; dropping query would change the endpoint.
     query = signer.CanonicalQueryString(req)
-    wire_url = f"{req.scheme}://{req.host}{req.uri}" + (f"?{query}" if query else "")
+    wire_url = f"{req.scheme}://{req.host}{req.uri}"
+    if query:
+        wire_url += f"?{query}"
     return urllib.request.Request(wire_url, data=req.body, headers=req.headers, method="POST")
 
 
@@ -101,7 +104,7 @@ def sse_frames(response: http.client.HTTPResponse) -> Iterator[dict]:
     """Print each line immediately; parse SSE data only at the event boundary."""
     data = []
     size = 0
-    limit = 16 * 1024 * 1024
+    limit = SSE_SIZE_LIMIT
     # io.TextIOWrapper buffers and decodes at UTF-8 character boundaries, so a readline that
     # splits a multi-byte sequence no longer raises UnicodeDecodeError. Track bytes via
     # len(raw.encode("utf-8")) to preserve the original size-limit semantics.
@@ -203,7 +206,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--url", default=os.getenv("AGENTARTS_RUNTIME_URL"),
         help="完整调用 URL，或 AGENTARTS_RUNTIME_URL",
     )
-    parser.add_argument("--region", default=os.getenv("AGENTARTS_REGION", "cn-southwest-2"))
+    parser.add_argument(
+        "--region", default=os.getenv("AGENTARTS_REGION", "cn-southwest-2"))
     parser.add_argument(
         "--sdk-dir", type=Path, default=os.getenv("APIG_SDK_PATH"),
         help="直接包含 apig_sdk 的官方 SDK 目录",

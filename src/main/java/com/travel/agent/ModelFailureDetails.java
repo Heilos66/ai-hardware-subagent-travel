@@ -16,6 +16,9 @@ import org.springframework.http.HttpHeaders;
 
 /** Request-local diagnostics; never retain upstream bodies, URLs or exception messages. */
 final class ModelFailureDetails {
+  private static final int MAX_HEADER_CHARS = 256;
+  private static final int MAX_CAUSE_DEPTH = 12;
+
   private volatile Integer status;
   private volatile String contentType;
   private volatile String requestId;
@@ -58,7 +61,7 @@ final class ModelFailureDetails {
     var causes = new ArrayList<Throwable>();
     var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
     Throwable next = error;
-    while (next != null && causes.size() < 12 && seen.add(next)) {
+    while (next != null && causes.size() < MAX_CAUSE_DEPTH && seen.add(next)) {
       causes.add(next);
       next = next.getCause();
     }
@@ -142,6 +145,6 @@ final class ModelFailureDetails {
   }
 
   private static String bounded(String value) {
-    return value == null ? null : Json.prefix(value.replaceAll("[\\p{Cntrl}]", " "), 256);
+    return value == null ? null : Json.prefix(value.replaceAll("[\\p{Cntrl}]", " "), MAX_HEADER_CHARS);
   }
 }

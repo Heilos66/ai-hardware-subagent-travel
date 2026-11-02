@@ -193,7 +193,7 @@ final class ExternalServices {
       }
       return result;
     } catch (IllegalArgumentException e) {
-      throw new AgentException("500", "图片分类服务响应格式错误");
+      throw new AgentException("500", "图片分类服务响应格式错误", e);
     }
   }
 }

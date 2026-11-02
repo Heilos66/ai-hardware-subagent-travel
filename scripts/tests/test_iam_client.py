@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -24,14 +25,16 @@ REGION = "cn-southwest-2"
 CAPABILITIES = {"inputs": {"operation": "query_capabilities"}}
 
 
-def frame(event, data=None):
+def frame(event: str, data: Optional[dict] = None) -> bytes:
+    """Build a single SSE frame with the given event name and optional data payload."""
     body = {"event": event}
     if data is not None:
         body["data"] = data
     return f"event: {event}\ndata: {json.dumps(body, ensure_ascii=False)}\n\n".encode()
 
 
-def finish(result=None, status=1):
+def finish(result: Optional[dict] = None, status: int = 1) -> bytes:
+    """Build a workflow_finished SSE frame embedding the result as responseContent."""
     if result is None:
         result = {
             "capabilities": {
@@ -120,7 +123,8 @@ class IAMTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(5)
 
-    def call(self, body=None, query="?endpoint=Latest", negative=False, output=None):
+    def call(self, body: Optional[dict] = None, query: str = "?endpoint=Latest",
+             negative: bool = False, output: Optional[io.StringIO] = None) -> tuple[int, str]:
         body = CAPABILITIES if body is None else body
         context = client.SigningContext(REGION, "local-test-session", AK, SK)
         request = client.signed_request(self.signer, self.url + query, body, context, negative)

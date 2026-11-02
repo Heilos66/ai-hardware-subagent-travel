@@ -127,7 +127,7 @@ final class RagFlowClient {
       return httpError(status.status);
     }
     return new AgentException("E5002", error instanceof TimeoutException
-        ? "RAGFlow知识检索调用超时" : "RAGFlow知识检索连接失败或响应格式错误");
+        ? "RAGFlow知识检索调用超时" : "RAGFlow知识检索连接失败或响应格式错误", error);
   }
 
   private Mono<String> token() {
@@ -136,7 +136,7 @@ final class RagFlowClient {
             ? Mono.just(settings.token())
             : Mono.fromCallable(() -> Files.readString(Path.of(settings.tokenFile())))
                 .subscribeOn(Schedulers.boundedElastic())
-                .onErrorMap(error -> new AgentException("E5004", "RAGFlow Token文件不可读取"));
+                .onErrorMap(error -> new AgentException("E5004", "RAGFlow Token文件不可读取", error));
     return source.map(RagFlowClient::validateToken);
   }
 

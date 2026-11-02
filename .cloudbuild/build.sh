@@ -1,9 +1,10 @@
 #!/bin/bash
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 # Test, package, and build Docker image.
-set -eu
+set -euo pipefail
 
 cleanup() {
+  # Remove the temporary JDK archive on exit, whether the build succeeds or fails.
   rm -f jdk.tar.gz
 }
 trap cleanup EXIT

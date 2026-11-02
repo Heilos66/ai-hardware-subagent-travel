@@ -12,6 +12,8 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+SSE_SIZE_LIMIT = 16 * 1024 * 1024
+
 
 def read_request(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
@@ -102,7 +104,7 @@ def consume_sse(response: http.client.HTTPResponse) -> int:
     finished = False
     ended = False
     size = 0
-    sse_limit = 16 * 1024 * 1024
+    sse_limit = SSE_SIZE_LIMIT
     for raw in response:
         size += len(raw)
         if size > sse_limit:
