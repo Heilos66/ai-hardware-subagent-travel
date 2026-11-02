@@ -25,7 +25,7 @@ if [ "${#image_tag}" -gt 128 ] || ! printf '%s\n' "$image_tag" | LC_ALL=C grep -
   exit 2
 fi
 image_name="convai_travel_agent:${image_tag}"
-image_base=${TRAVEL_BASE_IMAGE:-registry-cbu.huawei.com/hce_docker/hce_x86_64:3.0.2606.1}
+image_base=${TRAVEL_BASE_IMAGE:-registry-cbu.huawei.com/hce_docker/hce_arm:3.0.2606.1}
 image_created=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
 # Versions diagnose JDK selection without explicitly dumping machine-specific paths.

@@ -15,7 +15,7 @@ version: '2.0'
 env:
   resource:
     type: docker
-    image: kweecr05.his.huawei.com:80/ecr-build-green202/cbu_cloudbuild_euler2.10_x86_cs8.0:cui_1.0.5
+    image: kweecr05.his.huawei.com:80/ecr-build-green202/cbu_cloudbuild_euler2.10_arm_cs8.0:cui_1.0.5
     class: 8U16G
     mode: toolbox
     cache:

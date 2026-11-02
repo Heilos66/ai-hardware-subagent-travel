@@ -1,6 +1,6 @@
 # CI Dockerfile — uses Huawei internal base image + JDK from build environment.
 # Local build: run "tar -czf jdk.tar.gz -C $(dirname $JAVA_HOME) $(basename $JAVA_HOME)" first.
-ARG RUNTIME_IMAGE=registry-cbu.huawei.com/hce_docker/hce_x86_64:3.0.2606.1
+ARG RUNTIME_IMAGE=registry-cbu.huawei.com/hce_docker/hce_arm:3.0.2606.1
 FROM ${RUNTIME_IMAGE}
 
 # Install JDK from build context (packaged by build.sh from $JAVA_HOME)
