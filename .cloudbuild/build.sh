@@ -8,7 +8,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-TRAVEL_BUILD_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+TRAVEL_BUILD_ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$TRAVEL_BUILD_ROOT"
 
 image_revision=$(git rev-parse HEAD 2>/dev/null || printf 'unknown')
@@ -69,5 +69,5 @@ docker build \
   -t "$image_name" .
 docker image save --output "$artifact_dir/travel-agent-${build_time}.tar" "$image_name"
 gzip -n "$artifact_dir/travel-agent-${build_time}.tar"
-chmod 644 "$artifact_dir/travel-agent-${build_time}.tar.gz"
+chmod 600 "$artifact_dir/travel-agent-${build_time}.tar.gz"
 printf 'Image archive ready: %s/travel-agent-%s.tar.gz\n' "$artifact_dir" "$build_time"
