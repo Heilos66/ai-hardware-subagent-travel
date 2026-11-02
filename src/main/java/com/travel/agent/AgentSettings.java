@@ -20,14 +20,14 @@ public final class AgentSettings {
   final int maxQueryChars;
   final int maxResponseChars;
   final double classifierThreshold;
-  final boolean classifierFallbackOnTransientError;
+  final boolean isClassifierFallbackOnTransientErrorEnabled;
   final Duration classifierTimeout;
   final Duration modelTimeout;
   final Duration heartbeat;
   final Set<String> modelAllowedHosts;
   final RagFlow ragflow;
-  final boolean ragflowLogContent;
-  final boolean modelLogRequest;
+  final boolean isRagflowContentLoggingEnabled;
+  final boolean isModelRequestLoggingEnabled;
   final int diagnosticLogMaxChars;
 
   record RagFlow(
@@ -46,7 +46,7 @@ public final class AgentSettings {
       double minSimilarity,
       Duration timeout,
       int retries) {
-    boolean rerankEnabled() {
+    boolean isRerankEnabled() {
       return useRerank && !rerankId.isEmpty();
     }
 
@@ -74,8 +74,8 @@ public final class AgentSettings {
             number(env, "RAGFLOW_MIN_SIMILARITY", .3, 0, 1),
             duration(env, "RAGFLOW_TIMEOUT", 10, 300),
             integer(env, "RAGFLOW_RETRIES", 2, 0, 2));
-    ragflowLogContent = bool(env, "RAGFLOW_LOG_CONTENT", false);
-    modelLogRequest = bool(env, "MODEL_LOG_REQUEST", false);
+    isRagflowContentLoggingEnabled = bool(env, "RAGFLOW_LOG_CONTENT", false);
+    isModelRequestLoggingEnabled = bool(env, "MODEL_LOG_REQUEST", false);
     diagnosticLogMaxChars = integer(env, "DIAGNOSTIC_LOG_MAX_CHARS", 16000, 256, 65536);
     classifierUrl = url(env, "CLASSIFIER_URL", "");
     classifierKey = value(env, "CLASSIFIER_API_KEY", "");
@@ -85,7 +85,8 @@ public final class AgentSettings {
     maxQueryChars = integer(env, "MAX_QUERY_CHARS", 10_000, Integer.MAX_VALUE);
     maxResponseChars = integer(env, "MAX_RESPONSE_CHARS", 200, Integer.MAX_VALUE);
     classifierThreshold = number(env, "CLASSIFIER_THRESHOLD", .7, 0, 1);
-    classifierFallbackOnTransientError = bool(env, "CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", false);
+    isClassifierFallbackOnTransientErrorEnabled =
+        bool(env, "CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR", false);
     classifierTimeout = duration(env, "CLASSIFIER_TIMEOUT", 30, 300);
     modelTimeout = duration(env, "MODEL_TIMEOUT", 60, 600);
     heartbeat = duration(env, "HEARTBEAT_SECONDS", 15, 60);

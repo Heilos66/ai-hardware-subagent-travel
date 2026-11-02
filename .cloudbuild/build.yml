@@ -1,6 +1,6 @@
 # .cloudbuild/build.yml
 # 适配项目：ai-hardware-subagent-travel
-#   语言/构建：Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.9 + Maven 3.9.11（mvnw wrapper 3.3.4）
+#   语言/构建：Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.7 + Maven 3.9.11（mvnw wrapper 3.3.4）
 #   产物：target/travel-agent.jar（pom finalName=travel-agent）
 #
 # 字段依据（来自 aihardware-pipeline-config skill minimal-templates.md §1，2026-10-23/26 检索）：
@@ -43,10 +43,12 @@ steps:
         # 想出 jar 改 package；想跑集成测试改 verify
         command: |
           sh -c '
-            printf "build_environment JAVA_HOME=%s\n" "${JAVA_HOME:-<unset>}"
-            printf "build_environment PATH_java=%s\n" "$(command -v java || true)"
+            if [ -n "${JAVA_HOME:-}" ]; then
+              printf "build_environment JAVA_HOME_configured=true\n"
+            else
+              printf "build_environment JAVA_HOME_configured=false\n"
+            fi
             java -version 2>&1 || true
-            printf "build_environment PATH_javac=%s\n" "$(command -v javac || true)"
             javac -version 2>&1 || true
             chmod +x mvnw && ./mvnw -B -V -ntp clean test
           '

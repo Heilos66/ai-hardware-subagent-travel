@@ -25,8 +25,14 @@ image_name="travel-agent:${image_tag}"
 image_base=${TRAVEL_BASE_IMAGE:-registry-cbu.huawei.com/hce_docker/hce_x86_64:3.0.2606.1}
 image_created=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-printf 'build_environment JAVA_HOME=%s\n' "${JAVA_HOME:-<unset>}"
+# Versions diagnose JDK selection without explicitly dumping machine-specific paths.
+if [ -n "${JAVA_HOME:-}" ]; then
+  printf 'build_environment JAVA_HOME_configured=true\n'
+else
+  printf 'build_environment JAVA_HOME_configured=false\n'
+fi
 java -version 2>&1 || true
+javac -version 2>&1 || true
 docker --version
 docker info --format 'build_environment docker_server={{.ServerVersion}}'
 

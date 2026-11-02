@@ -34,8 +34,8 @@ final class WorkflowDiagnostics {
   void runtimeConfig() {
     emit(Context.empty(), "ragflow_config", () -> {
       var fields = configuration();
-      fields.put("content_logging", settings.ragflowLogContent);
-      fields.put("model_request_logging", settings.modelLogRequest);
+      fields.put("content_logging", settings.isRagflowContentLoggingEnabled);
+      fields.put("model_request_logging", settings.isModelRequestLoggingEnabled);
       fields.put("max_chars", settings.diagnosticLogMaxChars);
       return fields;
     });
@@ -64,7 +64,7 @@ final class WorkflowDiagnostics {
           "content_chars", Json.length(chunk.content()))).toList());
       return fields;
     }, token);
-    if (settings.ragflowLogContent) {
+    if (settings.isRagflowContentLoggingEnabled) {
       emit(context, "ragflow_content", () -> Map.of("question", query, "chunks", rawChunks), token);
     }
   }
@@ -101,8 +101,8 @@ final class WorkflowDiagnostics {
       fields.put("type", config.type());
       fields.put("provider", config.provider());
       fields.put("stream", true);
-      fields.put("body_logged", settings.modelLogRequest);
-      if (settings.modelLogRequest) {
+      fields.put("body_logged", settings.isModelRequestLoggingEnabled);
+      if (settings.isModelRequestLoggingEnabled) {
         fields.put("body", body);
       }
       return fields;
@@ -131,11 +131,11 @@ final class WorkflowDiagnostics {
     fields.put("token_source", !ragflow.tokenFile().isEmpty() ? "file"
         : ragflow.token().isBlank() ? "missing" : "environment");
     fields.put("use_rerank", ragflow.useRerank());
-    fields.put("rerank_enabled", ragflow.rerankEnabled());
+    fields.put("rerank_enabled", ragflow.isRerankEnabled());
     fields.put("knn_top_k", ragflow.knnTopK());
     fields.put("knn_num_candidates", ragflow.knnNumCandidates());
     fields.put("rerank_candidates_count",
-        ragflow.rerankEnabled() ? ragflow.rerankCandidatesCount() : null);
+        ragflow.isRerankEnabled() ? ragflow.rerankCandidatesCount() : null);
     return fields;
   }
 

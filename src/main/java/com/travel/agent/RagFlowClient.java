@@ -97,7 +97,7 @@ final class RagFlowClient {
     if (settings.knnNumCandidates() != null) {
       body.put("knn_num_candidates", settings.knnNumCandidates());
     }
-    if (settings.rerankEnabled()) {
+    if (settings.isRerankEnabled()) {
       body.put("rerank_id", settings.rerankId());
       if (settings.rerankCandidatesCount() != null) {
         body.put("rerank_candidates_count", settings.rerankCandidatesCount());

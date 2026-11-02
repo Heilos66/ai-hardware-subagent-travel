@@ -16,18 +16,31 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from dataclasses import dataclass, field
+from types import ModuleType
+from typing import Any, Iterator, Optional
 from pathlib import Path
 
 from test_io_spec import read_request
 
 
+@dataclass(frozen=True)
+class SigningContext:
+    region: str
+    session_id: str
+    ak: str = field(repr=False)
+    sk: str = field(repr=False)
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> None:
         # A redirect changes the signed target and must never forward credentials.
         return None
 
 
-def load_signer(sdk_dir):
+def load_signer(sdk_dir: Optional[Path]) -> ModuleType:
     if sdk_dir:
         if not (sdk_dir / "apig_sdk" / "signer.py").is_file():
             raise ValueError("SDK 目录必须直接包含 apig_sdk/signer.py")
@@ -38,7 +51,7 @@ def load_signer(sdk_dir):
         raise ValueError("未找到官方签名 SDK；请按 docs/verification.md 配置 APIG_SDK_PATH") from None
 
 
-def validate_url(url):
+def validate_url(url: str) -> None:
     parsed = urllib.parse.urlsplit(url)
     if (
         parsed.scheme != "https"
@@ -55,27 +68,34 @@ def validate_url(url):
     _ = parsed.port
 
 
-def signed_request(signer, url, body, region, session_id, ak, sk, invalid_signature=False):
-    sig = signer.Signer(algorithm="V11-HMAC-SHA256", region_id=region)
-    sig.Key, sig.Secret = ak, sk
+def signed_request(
+    signer: ModuleType,
+    url: str,
+    body: dict,
+    context: SigningContext,
+    invalid_signature: bool = False,
+) -> urllib.request.Request:
+    sig = signer.Signer(algorithm="V11-HMAC-SHA256", region_id=context.region)
+    sig.Key, sig.Secret = context.ak, context.sk
     headers = {
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
         "X-Sdk-Content-Sha256": "UNSIGNED-PAYLOAD",
-        "X-Hw-Agentarts-Session-Id": session_id,
+        "X-Hw-Agentarts-Session-Id": context.session_id,
     }
     req = signer.HttpRequest("POST", url, headers, json.dumps(body, ensure_ascii=False))
     sig.Sign(req)
     if invalid_signature:
         auth = req.headers["Authorization"]
-        req.headers["Authorization"] = auth[:-1] + ("0" if auth[-1] != "0" else "1")
+        replacement = "0" if auth[-1] != "0" else "1"
+        req.headers["Authorization"] = auth[:-1] + replacement
     # HttpRequest.uri contains ONLY the path; dropping query would change the endpoint.
     query = signer.CanonicalQueryString(req)
     wire_url = f"{req.scheme}://{req.host}{req.uri}" + (f"?{query}" if query else "")
     return urllib.request.Request(wire_url, data=req.body, headers=req.headers, method="POST")
 
 
-def sse_frames(response):
+def sse_frames(response: http.client.HTTPResponse) -> Iterator[dict]:
     """Print each line immediately; parse SSE data only at the event boundary."""
     data = []
     size = 0
@@ -107,7 +127,7 @@ def sse_frames(response):
         text_stream.detach()
 
 
-def consume_sse(response, operation):
+def consume_sse(response: http.client.HTTPResponse, operation: Optional[str]) -> int:
     finished = False
     business_error = False
     for frame in sse_frames(response):
@@ -137,7 +157,13 @@ def consume_sse(response, operation):
     raise ValueError("Missing workflow_finished or end")
 
 
-def invoke(request, operation, timeout, expect_auth_rejection=False, opener=None):
+def invoke(
+    request: urllib.request.Request,
+    operation: Optional[str],
+    timeout: float,
+    expect_auth_rejection: bool = False,
+    opener: Optional[urllib.request.OpenerDirector] = None,
+) -> int:
     opener = opener or urllib.request.build_opener(NoRedirect())
     start = time.monotonic()
     try:
@@ -169,21 +195,36 @@ def invoke(request, operation, timeout, expect_auth_rejection=False, opener=None
     return 1
 
 
-def main(argv=None):
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="IAM 签名调用 AgentArts；默认仅查询能力，实时输出 SSE")
-    parser.add_argument("--url", default=os.getenv("AGENTARTS_RUNTIME_URL"), help="完整调用 URL，或 AGENTARTS_RUNTIME_URL")
+    parser.add_argument(
+        "--url", default=os.getenv("AGENTARTS_RUNTIME_URL"),
+        help="完整调用 URL，或 AGENTARTS_RUNTIME_URL",
+    )
     parser.add_argument("--region", default=os.getenv("AGENTARTS_REGION", "cn-southwest-2"))
-    parser.add_argument("--sdk-dir", type=Path, default=os.getenv("APIG_SDK_PATH"), help="直接包含 apig_sdk 的官方 SDK 目录")
+    parser.add_argument(
+        "--sdk-dir", type=Path, default=os.getenv("APIG_SDK_PATH"),
+        help="直接包含 apig_sdk 的官方 SDK 目录",
+    )
     parser.add_argument("--session-id", default=str(uuid.uuid4()), help="默认每次生成新的 UUID")
-    parser.add_argument("--timeout", type=float, default=150, help="连接/单次读取超时秒数，默认 150；不是总时限")
+    parser.add_argument(
+        "--timeout", type=float, default=150,
+        help="连接/单次读取超时秒数，默认 150；不是总时限",
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--capabilities", action="store_true", help="查询能力（默认），不调用分类器或模型")
     source.add_argument("--spec", type=Path, help="读取 IO Markdown 内的请求体，调用实际业务服务")
     source.add_argument("--json", type=Path, dest="json_file", help="读取 JSON 文件内的请求体，调用实际业务服务")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="仅校验配置并生成签名，不发送请求或输出凭据")
-    mode.add_argument("--expect-auth-rejection", action="store_true", help="仅用能力查询，故意破坏签名，预期 HTTP 401/403")
-    args = parser.parse_args(argv)
+    mode.add_argument(
+        "--expect-auth-rejection", action="store_true",
+        help="仅用能力查询，故意破坏签名，预期 HTTP 401/403",
+    )
+    return parser
+
+
+def signing_context(args: argparse.Namespace, parser: argparse.ArgumentParser) -> SigningContext:
     if args.expect_auth_rejection and (args.spec or args.json_file):
         parser.error("反向认证测试只允许能力查询")
     if not args.url:
@@ -201,6 +242,12 @@ def main(argv=None):
     # This tool follows the documented long-term AK/SK flow; do not silently drop STS tokens.
     if os.getenv("HUAWEICLOUD_SDK_SECURITY_TOKEN"):
         parser.error("当前脚本使用长期 AK/SK；暂不支持带 Security Token 的临时凭据")
+    return SigningContext(args.region, args.session_id, ak, sk)
+
+
+def prepare_request(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, context: SigningContext
+) -> tuple[urllib.request.Request, dict]:
     try:
         validate_url(args.url)
         signer = load_signer(args.sdk_dir)
@@ -215,10 +262,20 @@ def main(argv=None):
             body = {"inputs": {"operation": "query_capabilities"}}
         if not isinstance(body, dict) or not isinstance(body.get("inputs"), dict):
             raise ValueError("Missing inputs")
-        request = signed_request(signer, args.url, body, args.region, args.session_id, ak, sk, args.expect_auth_rejection)
+        request = signed_request(
+            signer, args.url, body, context, args.expect_auth_rejection
+        )
     except (OSError, ValueError, TypeError):
         # JSON/parser/SDK exceptions may embed the body or credentials.
         parser.error("请求体读取、解析或 V11 签名失败；请检查文件、JSON 格式及 SDK 版本，不输出原始异常")
+    return request, body
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    context = signing_context(args, parser)
+    request, body = prepare_request(args, parser, context)
     if args.check:
         print("配置、请求体解析和 V11 签名生成成功；未发送请求，未验证云端权限。")
         return 0

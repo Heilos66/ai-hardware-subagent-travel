@@ -33,7 +33,11 @@ def frame(event, data=None):
 
 def finish(result=None, status=1):
     if result is None:
-        result = {"capabilities": {"chat_completions": True, "create_response": False, "fetch_response": False}}
+        result = {
+            "capabilities": {
+                "chat_completions": True, "create_response": False, "fetch_response": False,
+            }
+        }
     return frame("workflow_finished", {
         "status": {"code": status},
         "outputs": {"responseContent": json.dumps(result, ensure_ascii=False)},
@@ -49,7 +53,10 @@ class Gateway(BaseHTTPRequestHandler):
     def do_POST(self):
         server = self.server
         body = self.rfile.read(int(self.headers["Content-Length"]))
-        req = server.signer.HttpRequest("POST", f"http://{self.headers['Host']}{self.path}", dict(self.headers), body.decode())
+        req = server.signer.HttpRequest(
+            "POST", f"http://{self.headers['Host']}{self.path}",
+            dict(self.headers), body.decode(),
+        )
         sig = server.signer.Signer(algorithm="V11-HMAC-SHA256", region_id=REGION)
         sig.Key, sig.Secret = AK, SK
         valid = sig.Verify(req, self.headers["Authorization"])
@@ -93,7 +100,9 @@ class IAMTests(unittest.TestCase):
         self.server.release = None
         self.server.stream_wait_failed = False
         self.server.received = []
-        self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+        self.thread = threading.Thread(
+            target=self.server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True,
+        )
         self.thread.start()
         self.url = f"http://127.0.0.1:{self.server.server_port}/runtimes/travel-test/invocations"
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), client.NoRedirect())
@@ -107,7 +116,8 @@ class IAMTests(unittest.TestCase):
 
     def call(self, body=None, query="?endpoint=Latest", negative=False, output=None):
         body = CAPABILITIES if body is None else body
-        request = client.signed_request(self.signer, self.url + query, body, REGION, "local-test-session", AK, SK, negative)
+        context = client.SigningContext(REGION, "local-test-session", AK, SK)
+        request = client.signed_request(self.signer, self.url + query, body, context, negative)
         output, errors = output if output is not None else io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
             code = client.invoke(request, body["inputs"].get("operation"), 3, negative, self.opener)
@@ -142,7 +152,10 @@ class IAMTests(unittest.TestCase):
         })
 
     def test_changed_endpoint_fails_signature_verification(self):
-        request = client.signed_request(self.signer, self.url + "?endpoint=Latest", CAPABILITIES, REGION, "test", AK, SK)
+        request = client.signed_request(
+            self.signer, self.url + "?endpoint=Latest", CAPABILITIES,
+            client.SigningContext(REGION, "test", AK, SK),
+        )
         request.full_url = request.full_url.replace("Latest", "other")
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(client.invoke(request, "query_capabilities", 3, opener=self.opener), 3)
@@ -197,7 +210,11 @@ class IAMTests(unittest.TestCase):
         self.assertIn("思考片段", output)
 
     def test_incomplete_or_malformed_sse_fails(self):
-        for response in (finish(), frame("end"), b"data: {bad}\n\n", finish() + b'data: {"event":"end"}', finish({}) + frame("end")):
+        responses = (
+            finish(), frame("end"), b"data: {bad}\n\n",
+            finish() + b'data: {"event":"end"}', finish({}) + frame("end"),
+        )
+        for response in responses:
             with self.subTest(response=response):
                 self.server.last = response
                 self.assertEqual(self.call()[0], 1)
@@ -212,30 +229,59 @@ class IAMTests(unittest.TestCase):
 
     def test_read_timeout_fails(self):
         self.server.release = threading.Event()
-        request = client.signed_request(self.signer, self.url, CAPABILITIES, REGION, "test", AK, SK)
+        request = client.signed_request(
+            self.signer, self.url, CAPABILITIES, client.SigningContext(REGION, "test", AK, SK),
+        )
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(client.invoke(request, "query_capabilities", 0.05, opener=self.opener), 1)
 
     def test_cli_check_reads_io_without_sending_or_printing_credentials(self):
-        env = {"HUAWEICLOUD_SDK_AK": AK, "HUAWEICLOUD_SDK_SK": SK, "AGENTARTS_RUNTIME_URL": "https://test.example/runtimes/test/invocations?endpoint=Latest"}
+        env = {
+            "HUAWEICLOUD_SDK_AK": AK,
+            "HUAWEICLOUD_SDK_SK": SK,
+            "AGENTARTS_RUNTIME_URL": "https://test.example/runtimes/test/invocations?endpoint=Latest",
+        }
         body = {"inputs": {"query": "你好", "model_config": [{"auth_token": "private-model-token"}]}}
         with tempfile.TemporaryDirectory() as tmp:
             spec = Path(tmp) / "io.md"
             spec.write_text("curl example --data '" + json.dumps(body) + "'", encoding="utf-8")
             output = io.StringIO()
-            with patch.dict(os.environ, env, clear=True), patch.object(client, "invoke") as invoke, contextlib.redirect_stdout(output):
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch.dict(os.environ, env, clear=True))
+                invoke = stack.enter_context(patch.object(client, "invoke"))
+                stack.enter_context(contextlib.redirect_stdout(output))
                 self.assertEqual(client.main(["--spec", str(spec), "--check"]), 0)
                 invoke.assert_not_called()
             for secret in (AK, SK, "private-model-token"):
                 self.assertNotIn(secret, output.getvalue())
 
     def test_cli_configuration_errors_do_not_send_requests(self):
-        env = {"HUAWEICLOUD_SDK_AK": AK, "HUAWEICLOUD_SDK_SK": SK, "AGENTARTS_RUNTIME_URL": "https://test.example/runtimes/test/invocations"}
-        for args, changes in (([], {"HUAWEICLOUD_SDK_SK": ""}), (["--url", "http://example.com/invocations"], {}), (["--timeout", "nan"], {}), (["--expect-auth-rejection", "--json", "anything.json"], {})):
-            with self.subTest(args=args, changes=changes), patch.dict(os.environ, env | changes, clear=True), patch.object(client, "invoke") as invoke, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+        env = {
+            "HUAWEICLOUD_SDK_AK": AK,
+            "HUAWEICLOUD_SDK_SK": SK,
+            "AGENTARTS_RUNTIME_URL": "https://test.example/runtimes/test/invocations",
+        }
+        cases = (
+            ([], {"HUAWEICLOUD_SDK_SK": ""}),
+            (["--url", "http://example.com/invocations"], {}),
+            (["--timeout", "nan"], {}),
+            (["--expect-auth-rejection", "--json", "anything.json"], {}),
+        )
+        for args, changes in cases:
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(self.subTest(args=args, changes=changes))
+                stack.enter_context(patch.dict(os.environ, env | changes, clear=True))
+                invoke = stack.enter_context(patch.object(client, "invoke"))
+                stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                error = stack.enter_context(self.assertRaises(SystemExit))
                 client.main(args)
             self.assertEqual(error.exception.code, 2)
             invoke.assert_not_called()
+
+    def test_signing_context_repr_does_not_expose_credentials(self):
+        context = client.SigningContext(REGION, "test", AK, SK)
+        self.assertNotIn(AK, repr(context))
+        self.assertNotIn(SK, repr(context))
 
 
 if __name__ == "__main__":

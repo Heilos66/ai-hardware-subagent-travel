@@ -2,7 +2,10 @@ package com.travel.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -15,6 +18,28 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class InputValidationTest extends AgentTestSupport {
+  @ParameterizedTest
+  @ValueSource(strings = {"null", "[]", "1", "\"text\""})
+  void inputsRequireAnObject(String raw) {
+    assertThatThrownBy(() -> Inputs.parse(Json.parse(raw)))
+        .isInstanceOf(AgentException.class).hasMessage("请求参数格式错误");
+  }
+
+  @Test
+  void missingInputsObjectIsAnInputError() {
+    assertThatThrownBy(() -> Inputs.parse(null))
+        .isInstanceOf(AgentException.class).hasMessage("请求参数格式错误");
+  }
+
+  @Test
+  void unexpectedParserFailureIsNotReportedAsInvalidUserInput() {
+    JsonNode raw = mock(JsonNode.class);
+    when(raw.isObject()).thenReturn(true);
+    IllegalStateException failure = new IllegalStateException("internal parser failure");
+    when(raw.path("model_config")).thenThrow(failure);
+    assertThatThrownBy(() -> Inputs.parse(raw)).isSameAs(failure);
+  }
+
   @ParameterizedTest
   @CsvSource({"1%,0.01", "0.5%,0.005", "70%,0.7", "72.47,0.7247", "0.9,0.9"})
   void confidenceNormalization(String raw, double expected) {

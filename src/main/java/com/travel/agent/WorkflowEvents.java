@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.SignalType;
+import reactor.core.publisher.SynchronousSink;
 
 final class WorkflowEvents {
   private static final Logger LOG = LoggerFactory.getLogger(WorkflowEvents.class);
@@ -26,57 +27,10 @@ final class WorkflowEvents {
     return Flux.defer(
         () -> {
           State state = new State(settings.ragflow.enabled());
-          Flux<String> body =
-              agent
-                  .run(payload)
-                  .<String>handle(
-                      (step, sink) -> {
-                        if (step instanceof TravelAgent.Result result) {
-                          state.result = result.content();
-                          state.timing.finishStage("succeeded");
-                        } else {
-                          state.index++;
-                          if (step instanceof TravelAgent.Delta delta) {
-                            sink.next(message(delta.text(), delta.reasoning(), state.index));
-                          } else if (step instanceof TravelAgent.Stage stage) {
-                            state.timing.startStage(stage.id());
-                            Map<String, Object> data = new LinkedHashMap<>();
-                            data.put("agent_id", settings.workflowId);
-                            data.put("node_id", stage.id());
-                            data.put("node_status", "node_started");
-                            data.put("parent_workflow_id", "");
-                            data.put("status", Map.of("code", 0, "desc", "succeeded"));
-                            data.put("node_name", stage.name());
-                            data.put("node_type", stage.type());
-                            data.put("inputs", Map.of());
-                            data.put("outputs", Map.of());
-                            data.put("start_time", System.currentTimeMillis());
-                            data.put("execution_id", state.executionId);
-                            sink.next(event("node_started", data));
-                          }
-                        }
-                      })
-                  .onErrorResume(
-                      error -> {
-                        state.failed = true;
-                        state.timing.finishStage("failed");
-                        if (error instanceof AgentException known) {
-                          state.result = known.result();
-                        } else {
-                          // Never log exception text, URLs, prompts, or stack traces with
-                          // credentials.
-                          LOG.error(
-                              "workflow_failed execution_id={} type={}",
-                              state.executionId,
-                              error.getClass().getSimpleName());
-                          state.result = new AgentException("E5004", "内部处理异常").result();
-                        }
-                        return Flux.empty();
-                      });
           return withHeartbeat(
                   Flux.concat(
                       Flux.just(event("workflow_started", Map.of("start_time", state.start))),
-                      body,
+                      workflowBody(payload, state),
                       Flux.defer(() -> finish(state))),
                   settings.heartbeat)
               .doFinally(
@@ -92,6 +46,59 @@ final class WorkflowEvents {
                   .put(WorkflowDiagnostics.EXECUTION_ID, state.executionId)
                   .put(WorkflowDiagnostics.SECRETS, ConcurrentHashMap.<String>newKeySet()));
         });
+  }
+
+  private Flux<String> workflowBody(JsonNode payload, State state) {
+    return agent.run(payload)
+        .<String>handle((step, sink) -> writeStep(step, state, sink))
+        .onErrorResume(error -> fail(state, error));
+  }
+
+  private void writeStep(TravelAgent.Step step, State state, SynchronousSink<String> sink) {
+    if (step instanceof TravelAgent.Result result) {
+      state.result = result.content();
+      state.timing.finishStage("succeeded");
+      return;
+    }
+    state.index++;
+    if (step instanceof TravelAgent.Delta delta) {
+      sink.next(message(delta.text(), delta.reasoning(), state.index));
+    } else if (step instanceof TravelAgent.Stage stage) {
+      state.timing.startStage(stage.id());
+      sink.next(nodeStarted(stage, state));
+    }
+  }
+
+  private String nodeStarted(TravelAgent.Stage stage, State state) {
+    Map<String, Object> data = new LinkedHashMap<>();
+    data.put("agent_id", settings.workflowId);
+    data.put("node_id", stage.id());
+    data.put("node_status", "node_started");
+    data.put("parent_workflow_id", "");
+    data.put("status", Map.of("code", 0, "desc", "succeeded"));
+    data.put("node_name", stage.name());
+    data.put("node_type", stage.type());
+    data.put("inputs", Map.of());
+    data.put("outputs", Map.of());
+    data.put("start_time", System.currentTimeMillis());
+    data.put("execution_id", state.executionId);
+    return event("node_started", data);
+  }
+
+  private Flux<String> fail(State state, Throwable error) {
+    state.failed = true;
+    state.timing.finishStage("failed");
+    if (error instanceof AgentException known) {
+      state.result = known.result();
+    } else {
+      // Never log exception text, URLs, prompts, or stack traces with credentials.
+      LOG.error(
+          "workflow_failed execution_id={} type={}",
+          state.executionId,
+          error.getClass().getSimpleName());
+      state.result = new AgentException("E5004", "内部处理异常").result();
+    }
+    return Flux.empty();
   }
 
   private Flux<String> finish(State state) {

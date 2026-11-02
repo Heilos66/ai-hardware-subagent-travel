@@ -9,6 +9,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 
 def read_request(path: Path) -> dict:
@@ -22,7 +23,7 @@ def read_request(path: Path) -> dict:
     return body
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="本地测试 io_spec.md 请求体，实时显示 SSE")
     parser.add_argument(
         "--spec",
@@ -35,7 +36,12 @@ def main() -> int:
     parser.add_argument(
         "--capabilities", action="store_true", help="只查询能力，不调用任何外部服务"
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error("端口须为 1～65535")
     try:
@@ -55,9 +61,13 @@ def main() -> int:
         print("请求体解析成功，包含 inputs 对象。未发送请求，未输出凭证。")
         return 0
 
-    url = f"http://127.0.0.1:{args.port}/invocations"
+    return invoke(body, args.port, args.capabilities)
+
+
+def invoke(body: dict, port: int, capabilities: bool) -> int:
+    url = f"http://127.0.0.1:{port}/invocations"
     print(f"POST {url}（仅发送 JSON 请求体，不转发文档中的网关鉴权头）", flush=True)
-    if not args.capabilities:
+    if not capabilities:
         print("这是实际问答测试，将调用已配置的分类、检索或模型服务。", flush=True)
     request = urllib.request.Request(
         url,
@@ -67,37 +77,16 @@ def main() -> int:
     )
     # Ignore system proxies for this loopback-only request.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    business_error = False
-    finished = False
-    ended = False
-    size = 0
-    sse_limit = 16 * 1024 * 1024
     try:
         with opener.open(request, timeout=150) as response:
             print(
                 f"HTTP {response.status} · {response.headers.get('Content-Type', '')}", flush=True
             )
-            for raw in response:
-                size += len(raw)
-                if size > sse_limit:
-                    print("SSE 响应过大，已中止。", file=sys.stderr)
-                    return 1
-                line = raw.decode("utf-8")
-                print(line, end="", flush=True)
-                if not line.startswith("data:"):
-                    continue
-                frame = json.loads(line.removeprefix("data:").strip())
-                if frame.get("event") == "workflow_finished":
-                    data = frame["data"]
-                    result = json.loads(data["outputs"]["responseContent"])
-                    business_error = str(data.get("status", {}).get("code")) != "1"
-                    if "code" in result:
-                        business_error |= str(result["code"]) != "0"
-                    finished = True
-                if frame.get("event") == "end":
-                    ended = True
+            return consume_sse(response)
     except urllib.error.HTTPError as exc:
-        print(f"本地接口返回 HTTP {exc.code}，请检查请求格式。", file=sys.stderr)
+        code = exc.code
+        exc.close()
+        print(f"本地接口返回 HTTP {code}，请检查请求格式。", file=sys.stderr)
         return 1
     except (urllib.error.URLError, TimeoutError, OSError):
         print("连接失败或中断，请确认本地服务已启动、端口正确。", file=sys.stderr)
@@ -105,6 +94,33 @@ def main() -> int:
     except (ValueError, KeyError, TypeError):
         print("响应不符合约定的 SSE 格式。", file=sys.stderr)
         return 1
+
+
+def consume_sse(response) -> int:
+    business_error = False
+    finished = False
+    ended = False
+    size = 0
+    sse_limit = 16 * 1024 * 1024
+    for raw in response:
+        size += len(raw)
+        if size > sse_limit:
+            print("SSE 响应过大，已中止。", file=sys.stderr)
+            return 1
+        line = raw.decode("utf-8")
+        print(line, end="", flush=True)
+        if not line.startswith("data:"):
+            continue
+        frame = json.loads(line.removeprefix("data:").strip())
+        if frame.get("event") == "workflow_finished":
+            data = frame["data"]
+            result = json.loads(data["outputs"]["responseContent"])
+            business_error = str(data.get("status", {}).get("code")) != "1"
+            if "code" in result:
+                business_error |= str(result["code"]) != "0"
+            finished = True
+        if frame.get("event") == "end":
+            ended = True
     if not finished or not ended:
         print("响应未完整结束：缺少 workflow_finished 或 end。", file=sys.stderr)
         return 1

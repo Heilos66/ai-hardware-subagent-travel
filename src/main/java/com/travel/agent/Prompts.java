@@ -33,15 +33,16 @@ final class Prompts {
 
   private Prompts() {}
 
+  record Limits(int maxContextChars, int maxResponseChars) {}
+
   static Prompt build(
       String query,
       List<ExternalServices.KnowledgeChunk> chunks,
       ImageInput image,
       String exhibitName,
-      int maxChars,
-      int maxResponseChars) {
+      Limits limits) {
     String lengthLimit = "中文不超过%d字，English under %d words，日本語は%d字以内。"
-        .formatted(maxResponseChars, maxResponseChars, maxResponseChars);
+        .formatted(limits.maxResponseChars(), limits.maxResponseChars(), limits.maxResponseChars());
     SystemMessage system = new SystemMessage(PLAIN_TEXT_SYSTEM_PROMPT + lengthLimit);
     if (image != null) {
       UserMessage user =
@@ -64,11 +65,11 @@ final class Prompts {
           .append(chunk.title())
           .append("\n内容：")
           .append(chunk.content());
-      if (Json.length(context.toString()) >= maxChars) {
+      if (Json.length(context.toString()) >= limits.maxContextChars()) {
         break;
       }
     }
-    String text = Json.prefix(context.toString(), maxChars);
+    String text = Json.prefix(context.toString(), limits.maxContextChars());
     String instruction =
         text.isEmpty()
             ? "当前没有可用的内部资料，请基于可靠常识谨慎回答，无法确认的信息请明确说明。"

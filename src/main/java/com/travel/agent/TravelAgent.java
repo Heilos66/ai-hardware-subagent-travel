@@ -20,11 +20,13 @@ final class TravelAgent {
   private final AgentSettings settings;
   private final ExternalServices services;
   private final WebClient http;
+  private final Prompts.Limits promptLimits;
 
   TravelAgent(AgentSettings settings, ExternalServices services, WebClient http) {
     this.settings = settings;
     this.services = services;
     this.http = http;
+    this.promptLimits = new Prompts.Limits(settings.maxContextChars, settings.maxResponseChars);
   }
 
   Flux<Step> run(JsonNode payload) {
@@ -34,11 +36,16 @@ final class TravelAgent {
 
   private Flux<Step> route(JsonNode payload) {
     JsonNode raw = inputsObject(payload);
-    String operation = operationFrom(raw);
-    Flux<Step> dispatched = dispatchOperation(operation);
-    if (dispatched != null) {
-      return dispatched;
-    }
+    return switch (operationFrom(raw)) {
+      case "", "chat_completions" -> routeChat(raw);
+      case "query_capabilities" -> capabilities();
+      case "create_response", "fetch_response" ->
+          Flux.error(new AgentException("400", "能力不支持"));
+      default -> Flux.error(new AgentException("400", "参数非法"));
+    };
+  }
+
+  private Flux<Step> routeChat(JsonNode raw) {
     Inputs inputs = validateAndParseInputs(raw);
     ImageInput image = ImageInput.prepare(inputs, settings.maxImageBytes);
     String query = inputs.query().strip();
@@ -66,27 +73,12 @@ final class TravelAgent {
     return op == null || op.isNull() ? "" : op.asText();
   }
 
-  private static Flux<Step> dispatchOperation(String operation) {
-    if (operation.equals("query_capabilities")) {
-      return Flux.just(
-          new Result(
-              Map.of(
-                  "capabilities",
-                  Map.of(
-                      "chat_completions",
-                      true,
-                      "create_response",
-                      false,
-                      "fetch_response",
-                      false))));
-    }
-    if (operation.equals("create_response") || operation.equals("fetch_response")) {
-      return Flux.error(new AgentException("400", "能力不支持"));
-    }
-    if (!operation.isEmpty() && !operation.equals("chat_completions")) {
-      return Flux.error(new AgentException("400", "参数非法"));
-    }
-    return null;
+  private static Flux<Step> capabilities() {
+    return Flux.just(
+        new Result(
+            Map.of(
+                "capabilities",
+                Map.of("chat_completions", true, "create_response", false, "fetch_response", false))));
   }
 
   private Inputs validateAndParseInputs(JsonNode raw) {
@@ -110,8 +102,7 @@ final class TravelAgent {
                 chunks ->
                     generate(
                         model,
-                        Prompts.build(query, chunks, null, "", settings.maxContextChars,
-                            settings.maxResponseChars))));
+                        Prompts.build(query, chunks, null, "", promptLimits))));
   }
 
   private Flux<Step> routeImage(Inputs inputs, String query, ImageInput image) {
@@ -140,13 +131,11 @@ final class TravelAgent {
                               chunks,
                               null,
                               classification.name(),
-                              settings.maxContextChars,
-                              settings.maxResponseChars))));
+                              promptLimits))));
     }
     return generate(
         inputs.select("text_vision"),
-        Prompts.build(query, List.of(), image, "", settings.maxContextChars,
-            settings.maxResponseChars));
+        Prompts.build(query, List.of(), image, "", promptLimits));
   }
 
   private Flux<Step> generate(Inputs.ModelConfig config, Prompt prompt) {

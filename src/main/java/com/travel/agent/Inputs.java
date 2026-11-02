@@ -24,6 +24,9 @@ record Inputs(
   }
 
   static Inputs parse(JsonNode raw) {
+    if (raw == null || !raw.isObject()) {
+      throw AgentException.badInput();
+    }
     try {
       String query = string(raw, "query", "");
       List<String> urls = strings(raw, "image_url");
@@ -37,7 +40,7 @@ record Inputs(
         configs.add(parseModelConfig(model));
       }
       return new Inputs(query, urls, encoded, List.copyOf(configs));
-    } catch (RuntimeException e) {
+    } catch (IllegalArgumentException e) {
       throw AgentException.badInput();
     }
   }

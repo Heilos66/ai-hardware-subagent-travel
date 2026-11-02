@@ -219,11 +219,11 @@ final class CompatibleChatModel implements ChatModel {
   }
 
   private static List<Map<String, Object>> messages(Prompt prompt) {
-    List<Map<String, Object>> result = new ArrayList<>();
+    List<Map<String, Object>> result = new ArrayList<>(prompt.getInstructions().size());
     for (Message message : prompt.getInstructions()) {
       Object content = message.getText() == null ? "" : message.getText();
       if (message instanceof UserMessage user && !user.getMedia().isEmpty()) {
-        List<Map<String, Object>> parts = new ArrayList<>();
+        List<Map<String, Object>> parts = new ArrayList<>(user.getMedia().size() + 1);
         parts.add(Map.of("type", "text", "text", content));
         for (Media media : user.getMedia()) {
           Object data = media.getData();

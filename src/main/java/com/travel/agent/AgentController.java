@@ -60,7 +60,7 @@ final class AgentController {
                 if (payload == null || payload.isMissingNode()) {
                   throw new IllegalArgumentException();
                 }
-              } catch (RuntimeException e) {
+              } catch (IllegalArgumentException e) {
                 return error(exchange, 400, "请求体不是有效JSON");
               }
               var response = exchange.getResponse();
@@ -85,7 +85,8 @@ final class AgentController {
     response.setStatusCode(HttpStatusCode.valueOf(status));
     response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
     byte[] body =
-        Json.write(Map.of("code", String.valueOf(status), "message", message)).getBytes(StandardCharsets.UTF_8);
+        Json.write(Map.of("code", String.valueOf(status), "message", message))
+            .getBytes(StandardCharsets.UTF_8);
     return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
   }
 }

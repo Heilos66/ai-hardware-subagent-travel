@@ -4,6 +4,8 @@
 set -euo pipefail
 
 TRAVEL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly TRAVEL_ROOT
+readonly DEFAULT_LOG_PORT=8081
 cd "$TRAVEL_ROOT"
 
 # Print help text to stdout.
@@ -91,56 +93,54 @@ select_java() {
 
 # Resolve and validate a port number from arg or TRAVEL_LOG_PORT (default 8081).
 port_for() {
-  local requested="${1:-${TRAVEL_LOG_PORT:-8081}}"
+  local requested="${1:-${TRAVEL_LOG_PORT:-$DEFAULT_LOG_PORT}}"
   [[ "$requested" =~ ^[0-9]{1,5}$ ]] || die '端口必须是 1～65535 的整数。'
   requested=$((10#$requested))
   (( requested >= 1 && requested <= 65535 )) || die '端口必须在 1～65535 之间。'
   printf '%s\n' "$requested"
 }
 
-command_name="${1:-help}"
-if (( $# > 0 )); then shift; fi
-log_file="${TRAVEL_LOG_FILE:-$TRAVEL_ROOT/target/local-logs/application.log}"
+start_agent() {
+  local log_file="$1" run_port env_file
+  shift
+  (( $# <= 1 )) || die '用法：verify_logs.sh start [端口]'
+  run_port="$(port_for "${1:-}")"
+  [[ -f target/travel-agent.jar ]] || die '缺少 JAR，请先执行 ./scripts/verify_logs.sh build。'
+  env_file="${TRAVEL_LOG_ENV_FILE:-$TRAVEL_ROOT/.env}"
+  if [[ -f "$env_file" ]]; then
+    set -a
+    source "$env_file"
+    set +a
+  elif [[ -n "${TRAVEL_LOG_ENV_FILE:-}" ]]; then
+    die '指定的环境配置文件不存在。'
+  fi
+  select_java
+  umask 077
+  mkdir -p "$(dirname "$log_file")"
+  printf '启动已有 JAR：http://127.0.0.1:%s，知识库 RAGFlow\n日志：%s\n' "$run_port" "$log_file"
+  printf '源码改动后请先执行 build；等到 Started 日志出现，再在另一终端发送请求。\n'
+  PORT="$run_port" \
+    "$JAVA_HOME/bin/java" -jar target/travel-agent.jar 2>&1 | tee -a "$log_file"
+}
 
-case "$command_name" in
-  help|-h|--help)
-    usage
-    ;;
-  start)
-    (( $# <= 1 )) || die '用法：verify_logs.sh start [端口]'
-    run_port="$(port_for "${1:-}")"
-    [[ -f target/travel-agent.jar ]] || die '缺少 JAR，请先执行 ./scripts/verify_logs.sh build。'
-    env_file="${TRAVEL_LOG_ENV_FILE:-$TRAVEL_ROOT/.env}"
-    if [[ -f "$env_file" ]]; then
-      set -a
-      source "$env_file"
-      set +a
-    elif [[ -n "${TRAVEL_LOG_ENV_FILE:-}" ]]; then
-      die '指定的环境配置文件不存在。'
-    fi
-    select_java
-    umask 077
-    mkdir -p "$(dirname "$log_file")"
-    printf '启动已有 JAR：http://127.0.0.1:%s，知识库 RAGFlow\n日志：%s\n' "$run_port" "$log_file"
-    printf '源码改动后请先执行 build；等到 Started 日志出现，再在另一终端发送请求。\n'
-    PORT="$run_port" \
-      "$JAVA_HOME/bin/java" -jar target/travel-agent.jar 2>&1 | tee -a "$log_file"
-    ;;
-  capabilities|request)
-    require_python
-    if [[ "$command_name" = capabilities ]]; then
-      (( $# <= 1 )) || die '用法：verify_logs.sh capabilities [端口]'
-      python3 scripts/test_io_spec.py --port "$(port_for "${1:-}")" --capabilities
-    else
-      (( $# <= 2 )) || die '用法：verify_logs.sh request [端口] [IO文件]'
-      python3 scripts/test_io_spec.py --port "$(port_for "${1:-}")" \
-        --spec "${2:-$TRAVEL_ROOT/references/io_spec.md}"
-    fi
-    ;;
-  failure)
-    (( $# <= 1 )) || die '用法：verify_logs.sh failure [端口]'
-    require_python
-    python3 - "$(port_for "${1:-}")" <<'PY'
+invoke_request() {
+  local command_name="$1"
+  shift
+  require_python
+  if [[ "$command_name" = capabilities ]]; then
+    (( $# <= 1 )) || die '用法：verify_logs.sh capabilities [端口]'
+    python3 scripts/test_io_spec.py --port "$(port_for "${1:-}")" --capabilities
+  else
+    (( $# <= 2 )) || die '用法：verify_logs.sh request [端口] [IO文件]'
+    python3 scripts/test_io_spec.py --port "$(port_for "${1:-}")" \
+      --spec "${2:-$TRAVEL_ROOT/references/io_spec.md}"
+  fi
+}
+
+verify_failure() {
+  (( $# <= 1 )) || die '用法：verify_logs.sh failure [端口]'
+  require_python
+  python3 - "$(port_for "${1:-}")" <<'PY'
 import json
 import sys
 import urllib.request
@@ -172,42 +172,66 @@ if not finished or not ended:
     sys.exit("未收到完整的预期失败结果，验证未通过。")
 print("预期业务错误已验证；请执行 logs，检查 validate 和 total 的 status=failed。")
 PY
-    ;;
-  logs)
-    (( $# <= 1 )) || die '用法：verify_logs.sh logs [execution_id]'
-    [[ -f "$log_file" ]] || die "日志不存在，请先执行 start：$log_file"
-    if command -v rg >/dev/null 2>&1; then
-      matches="$(rg --no-heading --color never 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
-    else
-      matches="$(grep -E 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
+}
+
+show_logs() {
+  local log_file="$1" matches uuid_pattern
+  local id_patterns=()
+  shift
+  (( $# <= 1 )) || die '用法：verify_logs.sh logs [execution_id]'
+  [[ -f "$log_file" ]] || die "日志不存在，请先执行 start：$log_file"
+  if command -v rg >/dev/null 2>&1; then
+    matches="$(rg --no-heading --color never 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
+  else
+    matches="$(grep -E 'workflow_(timing|ttft|diagnostic) ' "$log_file" || true)"
+  fi
+  if [[ -n "${1:-}" ]]; then
+    id_patterns=(-e " execution_id=$1 ")
+    uuid_pattern='^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$'
+    if [[ "$1" =~ $uuid_pattern ]]; then
+      id_patterns+=(-e " execution_id=${1:0:8}****** ")
     fi
-    if [[ -n "${1:-}" ]]; then
-      id_patterns=(-e " execution_id=$1 ")
-      if [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
-        id_patterns+=(-e " execution_id=${1:0:8}****** ")
-      fi
-      matches="$(printf '%s\n' "$matches" | grep -F "${id_patterns[@]}" -- || true)"
-    fi
-    if [[ -n "$matches" ]]; then
-      printf '%s\n' "$matches"
-    else
-      printf '尚无匹配的耗时或诊断日志；请先发送请求，异步日志可能稍晚到达。\n'
-    fi
-    ;;
-  test|build)
-    select_java
-    maven_args=(-B)
-    if [[ -n "${MAVEN_REPO_LOCAL:-}" ]]; then
-      maven_args+=("-Dmaven.repo.local=$MAVEN_REPO_LOCAL")
-    fi
-    if [[ "$command_name" == test ]]; then
-      ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest,WorkflowDiagnosticsTest "$@" test
-    else
-      ./mvnw "${maven_args[@]}" -DskipTests "$@" package
-    fi
-    ;;
-  *)
-    usage >&2
-    die "未知命令：$command_name"
-    ;;
-esac
+    matches="$(printf '%s\n' "$matches" | grep -F "${id_patterns[@]}" -- || true)"
+  fi
+  if [[ -n "$matches" ]]; then
+    printf '%s\n' "$matches"
+  else
+    printf '尚无匹配的耗时或诊断日志；请先发送请求，异步日志可能稍晚到达。\n'
+  fi
+}
+
+run_maven() {
+  local command_name="$1"
+  local maven_args=()
+  shift
+  select_java
+  maven_args=(-B)
+  if [[ -n "${MAVEN_REPO_LOCAL:-}" ]]; then
+    maven_args+=("-Dmaven.repo.local=$MAVEN_REPO_LOCAL")
+  fi
+  if [[ "$command_name" == test ]]; then
+    ./mvnw "${maven_args[@]}" -Dtest=WorkflowTimingTest,WorkflowDiagnosticsTest "$@" test
+  else
+    ./mvnw "${maven_args[@]}" -DskipTests "$@" package
+  fi
+}
+
+main() {
+  local command_name="${1:-help}"
+  local log_file="${TRAVEL_LOG_FILE:-$TRAVEL_ROOT/target/local-logs/application.log}"
+  if (( $# > 0 )); then shift; fi
+  case "$command_name" in
+    help|-h|--help) usage ;;
+    start) start_agent "$log_file" "$@" ;;
+    capabilities|request) invoke_request "$command_name" "$@" ;;
+    failure) verify_failure "$@" ;;
+    logs) show_logs "$log_file" "$@" ;;
+    test|build) run_maven "$command_name" "$@" ;;
+    *)
+      usage >&2
+      die "未知命令：$command_name"
+      ;;
+  esac
+}
+
+main "$@"

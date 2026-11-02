@@ -63,7 +63,8 @@ final class ExternalServices {
                   ? ClassificationStatus.RECOGNIZED : ClassificationStatus.UNRECOGNIZED));
     }).onErrorResume(error -> {
       ClassifierFailure failure = classifyFailure(error);
-      boolean fallback = failure.transientFailure && settings.classifierFallbackOnTransientError;
+      boolean fallback =
+          failure.transientFailure && settings.isClassifierFallbackOnTransientErrorEnabled;
       new WorkflowDiagnostics(settings).classifierFailure(context, failure.code, failure.kind,
           failure.getMessage(), fallback);
       return fallback
@@ -146,8 +147,12 @@ final class ExternalServices {
               int status = response.statusCode().value();
               if (!response.statusCode().is2xxSuccessful()) {
                 String code = status == 401 ? "401" : status >= 400 && status < 500 ? "400" : "500";
-                return Mono.error(new ClassifierFailure(code, status == 401 || status == 403 ? "authentication" : "http_error",
-                    status >= 500 && status <= 599, "图片分类服务返回HTTP " + status));
+                return Mono.error(
+                    new ClassifierFailure(
+                        code,
+                        status == 401 || status == 403 ? "authentication" : "http_error",
+                        status >= 500 && status <= 599,
+                        "图片分类服务返回HTTP " + status));
               }
               return response
                   .bodyToMono(byte[].class)
@@ -160,7 +165,7 @@ final class ExternalServices {
                             throw new IllegalArgumentException();
                           }
                           return result;
-                        } catch (RuntimeException e) {
+                        } catch (IllegalArgumentException e) {
                           throw new AgentException("500", "图片分类服务响应格式错误");
                         }
                       });
