@@ -2,6 +2,10 @@
 
 本项目使用 Java 21、Spring Boot 3.5.15、Spring AI 1.0.7，通过自定义 ARM64 镜像部署。启动命令由 Dockerfile 提供，容器以 UID 10001 运行，监听 `0.0.0.0:8080`，健康接口为 `GET /ping`。不需要 Python AgentArts SDK。[Java 迁移说明](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_223.html)、[HTTP 入站协议](https://support.huaweicloud.com/highcode-agentarts/agentarts_10_070.html)
 
+知识检索可通过 `KNOWLEDGE_BACKEND=ame` 切换到 [ECS 独立 AME 服务](ame-ecs-deployment.md)。AME 的 C++/Python 进程独立部署，Agent 的镜像和 AgentArts 启动方式不变。
+
+当前 AME ECS 为 Huawei Cloud EulerOS 3.0 / x86_64，联网获取代码及部署步骤见 [AME Git 部署指南](ame-ecs-git-deployment.md)。
+
 ## 构建、验证和推送 SWR
 
 先按 [验证指南](verification.md) 完成自动化测试。每次发布使用新标签，下面的标签只是示例；镜像需要更新时，应构建、推送并切换运行时版本。

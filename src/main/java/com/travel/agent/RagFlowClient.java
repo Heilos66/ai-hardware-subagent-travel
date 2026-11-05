@@ -19,15 +19,17 @@ import reactor.core.scheduler.Schedulers;
 import reactor.util.context.ContextView;
 import reactor.util.retry.Retry;
 
-/** RAGFlow retrieval only; preserves cancellation and never exposes upstream error bodies. */
+/** RAGFlow-compatible remote retrieval; preserves cancellation and never exposes upstream error bodies. */
 final class RagFlowClient {
   private final WebClient http;
+  private final AgentSettings.KnowledgeBackend backend;
   private final AgentSettings.RagFlow settings;
   private final int maxQueryChars;
   private final WorkflowDiagnostics diagnostics;
 
   RagFlowClient(WebClient http, AgentSettings settings) {
     this.http = http;
+    this.backend = settings.knowledgeBackend;
     this.settings = settings.ragflow;
     this.maxQueryChars = settings.maxQueryChars;
     this.diagnostics = new WorkflowDiagnostics(settings);
@@ -76,20 +78,19 @@ final class RagFlowClient {
   private List<ExternalServices.KnowledgeChunk> readSearchResult(
       JsonNode response, String query, ContextView context, int attempts, String token) {
     var chunks = chunks(response);
-    diagnostics.retrievalResult(context, query, response.path("data").path("chunks"),
-        chunks, attempts, token);
+    diagnostics.retrievalResult(context, query, response, chunks, attempts, token);
     return chunks;
   }
 
   private void validateSearchConfig(String query) {
     if (settings.url().isEmpty()) {
-      throw new AgentException("E5004", "RAGFlow地址未配置：RAGFLOW_URL");
+      throw new AgentException("E5004", backend.label + "地址未配置：RAGFLOW_URL");
     }
     if (settings.datasetId().isEmpty()) {
-      throw new AgentException("E5004", "RAGFlow知识库ID未配置：RAGFLOW_DATASET_ID");
+      throw new AgentException("E5004", backend.label + "知识库ID未配置：RAGFLOW_DATASET_ID");
     }
     if (!AgentSettings.validId(settings.datasetId())) {
-      throw new AgentException("E5004", "RAGFlow知识库ID格式错误：RAGFLOW_DATASET_ID");
+      throw new AgentException("E5004", backend.label + "知识库ID格式错误：RAGFLOW_DATASET_ID");
     }
     if (query.isBlank() || Json.length(query) > maxQueryChars) {
       throw new AgentException("400", "检索内容必须为1至" + maxQueryChars + "个字符");
@@ -127,7 +128,7 @@ final class RagFlowClient {
       return httpError(status.status);
     }
     return new AgentException("E5002", error instanceof TimeoutException
-        ? "RAGFlow知识检索调用超时" : "RAGFlow知识检索连接失败或响应格式错误", error);
+        ? backend.label + "知识检索调用超时" : backend.label + "知识检索连接失败或响应格式错误", error);
   }
 
   private Mono<String> token() {
@@ -136,18 +137,18 @@ final class RagFlowClient {
             ? Mono.just(settings.token())
             : Mono.fromCallable(() -> Files.readString(Path.of(settings.tokenFile())))
                 .subscribeOn(Schedulers.boundedElastic())
-                .onErrorMap(error -> new AgentException("E5004", "RAGFlow Token文件不可读取", error));
-    return source.map(RagFlowClient::validateToken);
+                .onErrorMap(error -> new AgentException("E5004", backend.label + " Token文件不可读取", error));
+    return source.map(this::validateToken);
   }
 
-  private static String validateToken(String value) {
+  private String validateToken(String value) {
     String token = value.strip();
     if (token.isEmpty()
         || token.startsWith("E1-")
         || token.startsWith("${")
         || token.chars().anyMatch(Character::isWhitespace)
         || token.chars().anyMatch(Character::isISOControl)) {
-      throw new AgentException("E5004", "RAGFlow Token未配置或格式错误");
+      throw new AgentException("E5004", backend.label + " Token未配置或格式错误");
     }
     return token;
   }
@@ -159,10 +160,10 @@ final class RagFlowClient {
         .accept(MediaType.APPLICATION_JSON)
         .headers(headers -> headers.setBearerAuth(token))
         .bodyValue(body)
-        .exchangeToMono(RagFlowClient::readResponse);
+        .exchangeToMono(this::readResponse);
   }
 
-  private static Mono<JsonNode> readResponse(ClientResponse response) {
+  private Mono<JsonNode> readResponse(ClientResponse response) {
     int status = response.statusCode().value();
     if (status == 408 || status == 429 || status >= 500) {
       return Mono.error(new RetryableStatus(status));
@@ -171,7 +172,7 @@ final class RagFlowClient {
       return Mono.error(httpError(status));
     }
     return response.bodyToMono(JsonNode.class)
-        .switchIfEmpty(Mono.error(new AgentException("E5002", "RAGFlow检索响应为空")));
+        .switchIfEmpty(Mono.error(new AgentException("E5002", backend.label + "检索响应为空")));
   }
 
   private List<ExternalServices.KnowledgeChunk> chunks(JsonNode body) {
@@ -179,11 +180,12 @@ final class RagFlowClient {
     List<ExternalServices.KnowledgeChunk> result = new ArrayList<>();
     for (JsonNode chunk : chunks) {
       if (!validChunk(chunk)) {
-        throw new AgentException("E5002", "RAGFlow检索分片格式错误");
+        throw new AgentException("E5002", backend.label + "检索分片格式错误");
       }
       String content = chunk.path("content").asText().strip();
       double score = chunk.path("similarity").doubleValue();
-      if (content.isEmpty() || score < settings.minSimilarity()) {
+      if (content.isEmpty()
+          || (backend == AgentSettings.KnowledgeBackend.RAGFLOW && score < settings.minSimilarity())) {
         continue;
       }
       result.add(toKnowledgeChunk(chunk, content, score));
@@ -194,14 +196,14 @@ final class RagFlowClient {
     return List.copyOf(result);
   }
 
-  private static JsonNode validateResponseBody(JsonNode body) {
+  private JsonNode validateResponseBody(JsonNode body) {
     JsonNode code = body.path("code");
     if (!code.isIntegralNumber() || !code.canConvertToInt() || code.intValue() != 0) {
-      throw new AgentException("E5002", "RAGFlow知识检索返回业务错误");
+      throw new AgentException("E5002", backend.label + "知识检索返回业务错误");
     }
     JsonNode chunks = body.path("data").path("chunks");
     if (!chunks.isArray()) {
-      throw new AgentException("E5002", "RAGFlow检索响应缺少chunks");
+      throw new AgentException("E5002", backend.label + "检索响应缺少chunks");
     }
     return chunks;
   }
@@ -221,8 +223,8 @@ final class RagFlowClient {
         chunk.path("id").asText(""), score);
   }
 
-  private static AgentException httpError(int status) {
-    return new AgentException("E5002", "RAGFlow知识检索返回HTTP " + status);
+  private AgentException httpError(int status) {
+    return new AgentException("E5002", backend.label + "知识检索返回HTTP " + status);
   }
 
   private static final class RetryableStatus extends RuntimeException {

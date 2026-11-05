@@ -4,25 +4,56 @@
 
 ## 必填且无可用默认值的变量
 
-完整支持真实知识库检索和图片问答时，需要配置以下 4 项；其中知识库 Token 可由文件提供。这些变量在代码中默认为空字符串，没有可直接使用的默认值。
+完整支持真实知识库检索和图片问答时，需要配置以下 5 项；其中知识库 Token 可由文件提供。这些变量在代码中默认为空字符串，没有可直接使用的默认值。
 
 | 环境变量 | 作用 | 必填条件 |
 | --- | --- | --- |
 | `RAGFLOW_URL` | 完整检索地址，包含 `/api/v1/retrieval`；按网络选择私网或公网 | `RAGFLOW_ENABLED=true` 且请求进入知识检索分支时 |
 | `RAGFLOW_DATASET_ID` | 目标知识库 ID | `RAGFLOW_ENABLED=true` 且请求进入知识检索分支时 |
 | `RAGFLOW_API_TOKEN` | 知识库访问凭据 | 执行真实检索且未配置 `RAGFLOW_API_TOKEN_FILE` 时 |
+| `CLASSIFIER_URL` | 图片分类服务完整 URL | 请求包含图片时 |
 | `CLASSIFIER_API_KEY` | 图片分类服务密钥 | 请求包含图片时；图片分支始终先调用分类器 |
 
-按场景配置：纯文本真实检索需要前三项；完整图片问答还需要分类器密钥，因为高置信度图片会进入检索。`RAGFLOW_ENABLED=false` 时，前三项可以不配置；纯文本请求也不需要分类器密钥，图片请求仍需要。仅启动服务、调用 `/ping` 或 `query_capabilities` 不需要这些业务凭据；缺失配置会在执行对应业务分支时返回 E5004。
+按场景配置：纯文本真实检索需要前三项；完整图片问答还需要分类器地址和密钥，因为高置信度图片会进入检索。`RAGFLOW_ENABLED=false` 时，前三项可以不配置；纯文本请求也不需要分类器密钥，图片请求仍需要分类器地址和密钥。仅启动服务、调用 `/ping` 或 `query_capabilities` 不需要这些业务凭据；缺失配置会在执行对应业务分支时返回 E5004。
 
 需要区分的可选项与替代方式：
 
 - `RAGFLOW_API_TOKEN_FILE` 可替代 `RAGFLOW_API_TOKEN`，配置后优先读取文件；文件不可读或内容无效时不会回退到环境 Token。
 - `RAGFLOW_RERANK_ID` 没有默认值，但不是基础检索必填项；未配置时不发送重排参数，即使 `RAGFLOW_USE_RERANK=true` 也不会启用重排。
-- `CLASSIFIER_URL` 已有默认值 `http://1.95.152.66:16000/mobilenetv3large`，可以不重复配置。
+- `CLASSIFIER_URL` 当前代码默认为空；有图片请求时须显式配置完整地址，例如 `http://classifier.internal:16000/mobilenetv3large`。
 - 模型地址、名称和密钥由请求中的 `inputs.model_config` 提供，不属于运行时环境变量。
 
 **`.env.example` 中填写的知识库地址、ID 和重排模型只是配置示例，不是代码默认值。** 需通过本地启动脚本加载 `.env`，或在 AgentArts 运行时显式配置；它们不会随镜像自动生效。公网与私网地址见下文[地址切换](#公网与私网地址切换)。
+
+## 独立 AME 后端
+
+新增 `KNOWLEDGE_BACKEND`，选填，默认 `ragflow`，仅接受 `ragflow` 或 `ame`。AME 在 ECS 独立运行，Agent 镜像保持 Java 服务；网络请求仍使用兼容的 `/api/v1/retrieval` 协议，因此沿用 `RAGFLOW_*` 连接变量。
+
+| 配置 | `ragflow` | `ame` |
+| --- | --- | --- |
+| `RAGFLOW_ENABLED` | 默认 true；false 跳过检索 | 相同，不读取 Token、不发请求，空资料继续模型 |
+| `RAGFLOW_URL` / `RAGFLOW_DATASET_ID` | RAGFlow 完整 URL / ID | AME 完整 URL / ID；真实检索必填 |
+| `RAGFLOW_API_TOKEN` / `RAGFLOW_API_TOKEN_FILE` | Bearer；文件优先 | 相同；须使用 AME 服务的 Token |
+| `RAGFLOW_TOP_K` / `RAGFLOW_TIMEOUT` | 默认 3 / 10 秒 | 相同 |
+| `RAGFLOW_RETRIES` | 未设置时默认 2 | 未设置时默认 0；显式配置仍生效，建议 0 |
+| `RAGFLOW_USE_RERANK` / `RAGFLOW_RERANK_ID` | 按原规则控制重排 | 忽略，不发送重排字段 |
+| `RAGFLOW_KNN_TOP_K` / `RAGFLOW_KNN_NUM_CANDIDATES` / `RAGFLOW_RERANK_CANDIDATES_COUNT` | 按原规则发送 | 忽略，不发送 |
+| `RAGFLOW_SIMILARITY_THRESHOLD` | 默认 0.2 | 忽略，协议字段固定为 0 |
+| `RAGFLOW_MIN_SIMILARITY` | 默认 0.3，过滤低分 | 忽略；AME graph 分数不是 0～1 相似度，保留有限数值分数 |
+| `RAGFLOW_LOG_CONTENT` | 默认 false | 相同，控制 AME 检索正文日志 |
+
+切换示例（Token 另行配置，不能继续用旧 RAGFlow Token）：
+
+```dotenv
+KNOWLEDGE_BACKEND=ame
+RAGFLOW_ENABLED=true
+RAGFLOW_URL=http://1.95.196.125:18087/api/v1/retrieval
+RAGFLOW_DATASET_ID=ame-travel
+RAGFLOW_RETRIES=0
+RAGFLOW_TOP_K=3
+```
+
+`MAX_QUERY_CHARS=10000` 与本次 AME 服务上限一致；不要仅提高 Agent 上限而不更新 AME 服务。AME 空结果会继续模型，检索失败保留 E5002；缺失连接/Token 配置保留 E5004。日志事件前缀改为 `ame_`，阶段及 TTFT 的 `search_mode=ame`。部署与验证见 [AME 独立服务](ame-ecs-deployment.md)。下面 RAGFlow 专用参数表的默认值仅适用于 `KNOWLEDGE_BACKEND=ragflow`。
 
 ## 配置位置与生效方式
 
@@ -57,6 +88,7 @@ RAGFLOW_DATASET_ID=e611c8e0c45111f19cb7ff060c22c24e
 RAGFLOW_API_TOKEN=替换为实际RAGFlowToken
 
 # 图片请求必需
+CLASSIFIER_URL=http://classifier.internal:16000/mobilenetv3large
 CLASSIFIER_API_KEY=替换为实际图片分类器密钥
 
 # 以下为当前接入方案使用的可选配置
@@ -160,7 +192,7 @@ RAGFLOW_RERANK_CANDIDATES_COUNT=null
 | 环境变量 | 是否必须 | 未配置时 | 作用与要求 |
 | --- | --- | --- | --- |
 | `CLASSIFIER_API_KEY` | 图片请求必填 | 空，分类返回 E5004 | 原始分类器密钥，放入 `X-API-Key` 请求头；纯文本不使用 |
-| `CLASSIFIER_URL` | 选填 | `http://1.95.152.66:16000/mobilenetv3large` | 分类接口完整 URL；当前部署可沿用默认值 |
+| `CLASSIFIER_URL` | 图片请求必填 | 空 | 分类接口完整 URL；必须按实际部署配置 |
 | `CLASSIFIER_THRESHOLD` | 选填 | `0.7` | 范围 0～1；分类结果合法且置信度 ≥ 此值走知识检索与文本模型；合法低置信度结果走视觉模型，非法字段按服务失败处理 |
 | `CLASSIFIER_TIMEOUT` | 选填 | `30` 秒 | 0.000001～300 秒；分类请求总超时 |
 | `CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR` | 选填 | `false` | 接受 true/false；true 时仅分类调用超时、连接失败、HTTP 5xx 转视觉模型；false 时这些故障直接失败。鉴权、配置、TLS/DNS、业务及响应格式错误不降级 |

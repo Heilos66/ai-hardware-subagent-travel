@@ -21,8 +21,13 @@ final class WorkflowTiming {
   private boolean firstTokenReceived;
 
   WorkflowTiming(String executionId, boolean retrievalEnabled) {
+    this(executionId, retrievalEnabled, AgentSettings.KnowledgeBackend.RAGFLOW);
+  }
+
+  WorkflowTiming(
+      String executionId, boolean retrievalEnabled, AgentSettings.KnowledgeBackend backend) {
     this.logExecutionId = maskId(executionId);
-    this.searchMode = retrievalEnabled ? "ragflow" : "disabled";
+    this.searchMode = retrievalEnabled ? backend.id : "disabled";
   }
 
   synchronized void startStage(String next) {

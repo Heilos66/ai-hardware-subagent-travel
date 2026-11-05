@@ -2,7 +2,9 @@
 
 Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.7（WebFlux），部署到 AgentArts 高代码运行时，不依赖巫山框架。
 
-保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索默认使用 RAGFlow，接入文档中的 travel_kb，通过 `RAGFLOW_URL` 配置私网或公网地址。测试时可设 `RAGFLOW_ENABLED=false`，跳过检索并以空资料继续模型调用。
+保留 MobileNet 分类与三条路径：纯文本进入检索和文本模型；图片分类名称非空且置信度 ≥ 0.7 时进入检索和文本模型；其余图片进入视觉模型。分类 HTTP 失败直接结束流程。知识检索默认使用 RAGFlow，接入文档中的 travel_kb，通过 `RAGFLOW_URL` 配置私网或公网地址。可设 `KNOWLEDGE_BACKEND=ame` 连接 [ECS 独立 AME 服务](docs/ame-ecs-deployment.md)，复用 `RAGFLOW_*` 连接配置。测试时可设 `RAGFLOW_ENABLED=false`，跳过检索并以空资料继续模型调用。
+
+独立 AME 部署：[HCE 3.0 / x86_64 联网 Git 部署步骤](docs/ame-ecs-git-deployment.md) · [已有 ECS 部署记录](docs/ame-ecs-deployment.md)。AME 核心通过公开仓库获取，接口适配代码可从本分支的 `deploy/ame/` 获取，也支持独立包上传；知识数据单独提供，文件准备和校验见部署步骤第 1、4 节。
 
 ## 目录
 
@@ -14,6 +16,7 @@ Java 21 + Spring Boot 3.5.15 + Spring AI 1.0.7（WebFlux），部署到 AgentArt
 ├── src/test/
 │   ├── java/com/travel/agent/ # 回归测试
 │   └── resources/     # 测试日志配置
+├── deploy/ame/        # 独立 AME graph 服务、构建和 systemd 配置
 ├── scripts/           # IO、IAM 调用、日志验证脚本及客户端测试
 ├── docs/
 │   ├── deployment.md  # 镜像、SWR、AgentArts 部署

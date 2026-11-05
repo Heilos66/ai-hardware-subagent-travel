@@ -26,9 +26,30 @@ public final class AgentSettings {
   final Duration heartbeat;
   final Set<String> modelAllowedHosts;
   final RagFlow ragflow;
+  final KnowledgeBackend knowledgeBackend;
   final boolean isRagflowContentLoggingEnabled;
   final boolean isModelRequestLoggingEnabled;
   final int diagnosticLogMaxChars;
+
+  enum KnowledgeBackend {
+    RAGFLOW("ragflow", "RAGFlow"), AME("ame", "AME");
+
+    final String id;
+    final String label;
+
+    KnowledgeBackend(String id, String label) {
+      this.id = id;
+      this.label = label;
+    }
+
+    static KnowledgeBackend parse(String value) {
+      return switch (value.strip().toLowerCase(Locale.ROOT)) {
+        case "ragflow" -> RAGFLOW;
+        case "ame" -> AME;
+        default -> throw new IllegalArgumentException("KNOWLEDGE_BACKEND必须为ragflow或ame");
+      };
+    }
+  }
 
   record RagFlow(
       boolean enabled,
@@ -57,6 +78,8 @@ public final class AgentSettings {
   }
 
   public AgentSettings(Environment env) {
+    knowledgeBackend = KnowledgeBackend.parse(value(env, "KNOWLEDGE_BACKEND", "ragflow"));
+    boolean isAme = knowledgeBackend == KnowledgeBackend.AME;
     ragflow =
         new RagFlow(
             bool(env, "RAGFLOW_ENABLED", true),
@@ -64,16 +87,16 @@ public final class AgentSettings {
             value(env, "RAGFLOW_API_TOKEN", ""),
             value(env, "RAGFLOW_API_TOKEN_FILE", "").strip(),
             value(env, "RAGFLOW_DATASET_ID", "").strip(),
-            value(env, "RAGFLOW_RERANK_ID", "").strip(),
-            bool(env, "RAGFLOW_USE_RERANK", true),
-            optionalPositiveInteger(env, "RAGFLOW_KNN_TOP_K", 64),
-            optionalPositiveInteger(env, "RAGFLOW_KNN_NUM_CANDIDATES", 128),
-            optionalPositiveInteger(env, "RAGFLOW_RERANK_CANDIDATES_COUNT", 32),
+            isAme ? "" : value(env, "RAGFLOW_RERANK_ID", "").strip(),
+            !isAme && bool(env, "RAGFLOW_USE_RERANK", true),
+            isAme ? null : optionalPositiveInteger(env, "RAGFLOW_KNN_TOP_K", 64),
+            isAme ? null : optionalPositiveInteger(env, "RAGFLOW_KNN_NUM_CANDIDATES", 128),
+            isAme ? null : optionalPositiveInteger(env, "RAGFLOW_RERANK_CANDIDATES_COUNT", 32),
             integer(env, "RAGFLOW_TOP_K", 3, 50),
-            number(env, "RAGFLOW_SIMILARITY_THRESHOLD", .2, 0, 1),
-            number(env, "RAGFLOW_MIN_SIMILARITY", .3, 0, 1),
+            isAme ? 0 : number(env, "RAGFLOW_SIMILARITY_THRESHOLD", .2, 0, 1),
+            isAme ? 0 : number(env, "RAGFLOW_MIN_SIMILARITY", .3, 0, 1),
             duration(env, "RAGFLOW_TIMEOUT", 10, 300),
-            integer(env, "RAGFLOW_RETRIES", 2, 0, 2));
+            integer(env, "RAGFLOW_RETRIES", isAme ? 0 : 2, 0, 2));
     isRagflowContentLoggingEnabled = bool(env, "RAGFLOW_LOG_CONTENT", false);
     isModelRequestLoggingEnabled = bool(env, "MODEL_LOG_REQUEST", false);
     diagnosticLogMaxChars = integer(env, "DIAGNOSTIC_LOG_MAX_CHARS", 16000, 256, 65536);

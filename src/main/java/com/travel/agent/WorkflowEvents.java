@@ -26,7 +26,7 @@ final class WorkflowEvents {
   Flux<String> stream(JsonNode payload) {
     return Flux.defer(
         () -> {
-          State state = new State(settings.ragflow.enabled());
+          State state = new State(settings);
           return withHeartbeat(
                   Flux.concat(
                       Flux.just(event("workflow_started", Map.of("start_time", state.start))),
@@ -195,8 +195,8 @@ final class WorkflowEvents {
     boolean failed;
     Map<String, Object> result;
 
-    State(boolean retrievalEnabled) {
-      timing = new WorkflowTiming(executionId, retrievalEnabled);
+    State(AgentSettings settings) {
+      timing = new WorkflowTiming(executionId, settings.ragflow.enabled(), settings.knowledgeBackend);
     }
   }
 }

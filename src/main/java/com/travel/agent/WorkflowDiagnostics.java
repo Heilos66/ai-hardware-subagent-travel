@@ -32,7 +32,7 @@ final class WorkflowDiagnostics {
   }
 
   void runtimeConfig() {
-    emit(Context.empty(), "ragflow_config", () -> {
+    emit(Context.empty(), retrievalEvent("config"), () -> {
       var fields = configuration();
       fields.put("content_logging", settings.isRagflowContentLoggingEnabled);
       fields.put("model_request_logging", settings.isModelRequestLoggingEnabled);
@@ -41,8 +41,9 @@ final class WorkflowDiagnostics {
     });
   }
 
-  void retrievalResult(ContextView context, String query, JsonNode rawChunks,
+  void retrievalResult(ContextView context, String query, JsonNode response,
       List<ExternalServices.KnowledgeChunk> chunks, int attempts, String token) {
+    JsonNode rawChunks = response.path("data").path("chunks");
     // The SECRETS set is a ConcurrentHashMap.newKeySet() put into context by WorkflowEvents
     // (context itself is immutable; this mutable set is the intended accumulator). Tokens read
     // from a rotating file are added here so later emits (e.g. model_request) redact them too.
@@ -52,9 +53,11 @@ final class WorkflowDiagnostics {
     } catch (RuntimeException ignored) {
       return;
     }
-    emit(context, "ragflow_result", () -> {
+    emit(context, retrievalEvent("result"), () -> {
       Map<String, Object> fields = new LinkedHashMap<>();
       fields.put("status", "succeeded");
+      fields.put("backend", settings.knowledgeBackend.id);
+      addRetrievalTimings(fields, response.path("meta"));
       fields.put("attempts", attempts);
       fields.put("returned_chunks", rawChunks.size());
       fields.put("kept_chunks", chunks.size());
@@ -65,18 +68,19 @@ final class WorkflowDiagnostics {
       return fields;
     }, token);
     if (settings.isRagflowContentLoggingEnabled) {
-      emit(context, "ragflow_content", () -> Map.of("question", query, "chunks", rawChunks), token);
+      emit(context, retrievalEvent("content"),
+          () -> Map.of("question", query, "chunks", rawChunks), token);
     }
   }
 
   void retrievalSkipped(ContextView context) {
-    emit(context, "ragflow_skipped", () -> Map.of(
-        "status", "skipped", "reason", "RAGFLOW_ENABLED=false", "attempts", 0,
-        "kept_chunks", 0));
+    emit(context, retrievalEvent("skipped"), () -> Map.of(
+        "backend", settings.knowledgeBackend.id, "status", "skipped",
+        "reason", "RAGFLOW_ENABLED=false", "attempts", 0, "kept_chunks", 0));
   }
 
   void retrievalFailure(ContextView context, int attempts, Throwable error) {
-    emit(context, "ragflow_failed", () -> {
+    emit(context, retrievalEvent("failed"), () -> {
       var fields = configuration();
       fields.put("status", "failed");
       fields.put("attempts", attempts);
@@ -121,9 +125,26 @@ final class WorkflowDiagnostics {
     }, config.token());
   }
 
+  private String retrievalEvent(String suffix) {
+    return settings.knowledgeBackend.id + "_" + suffix;
+  }
+
+  private void addRetrievalTimings(Map<String, Object> fields, JsonNode metadata) {
+    if (settings.knowledgeBackend != AgentSettings.KnowledgeBackend.AME) {
+      return;
+    }
+    for (String key : List.of("ame_recall_ms", "cheap_rerank_ms", "queue_ms", "adapter_ms")) {
+      JsonNode value = metadata.path(key);
+      if (value.isNumber() && Double.isFinite(value.doubleValue()) && value.doubleValue() >= 0) {
+        fields.put(key, value.doubleValue());
+      }
+    }
+  }
+
   private Map<String, Object> configuration() {
     var ragflow = settings.ragflow;
     Map<String, Object> fields = new LinkedHashMap<>();
+    fields.put("backend", settings.knowledgeBackend.id);
     fields.put("enabled", ragflow.enabled());
     fields.put("url_configured", !ragflow.url().isEmpty());
     fields.put("dataset_id_configured", !ragflow.datasetId().isEmpty());

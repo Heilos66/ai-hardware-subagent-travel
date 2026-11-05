@@ -90,6 +90,22 @@ class WorkflowDiagnosticsTest extends AgentTestSupport {
   }
 
   @Test
+  void ameDiagnosticsKeepOnlyFiniteAllowlistedTimings() {
+    handler = request -> request.uri().startsWith("/api/v1/retrieval")
+        ? Reply.json(Map.of("code", 0, "data", Map.of("chunks", List.of()), "meta", Map.of(
+            "ame_recall_ms", 12.5, "queue_ms", 0.2, "adapter_ms", -1,
+            "cheap_rerank_ms", "invalid", "unexpected", "secret-value"))) : success(request);
+    run(input(), settings(Map.of("KNOWLEDGE_BACKEND", "ame")));
+    var data = event("ame_result").data();
+    assertThat(data.path("backend").asText()).isEqualTo("ame");
+    assertThat(data.path("ame_recall_ms").doubleValue()).isEqualTo(12.5);
+    assertThat(data.path("queue_ms").doubleValue()).isEqualTo(0.2);
+    assertThat(data.has("adapter_ms")).isFalse();
+    assertThat(data.has("cheap_rerank_ms")).isFalse();
+    assertThat(String.join("\n", logs)).doesNotContain("secret-value", "search-secret");
+  }
+
+  @Test
   void modelHttpFailureLogsMetadataWithoutChangingPublicError() {
     http = org.springframework.web.reactive.function.client.WebClient.builder()
         .exchangeFunction(request -> reactor.core.publisher.Mono.just(

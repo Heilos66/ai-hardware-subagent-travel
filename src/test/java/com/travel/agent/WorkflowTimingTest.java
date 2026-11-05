@@ -61,6 +61,17 @@ class WorkflowTimingTest extends AgentTestSupport {
   }
 
   @Test
+  void ameTtftKeepsStageAccountingAndBackendName() {
+    var events = run(input(), settings(Map.of("KNOWLEDGE_BACKEND", "ame")));
+    assertThat(result(events).path("code").asText()).isEqualTo("0");
+    awaitTotals(1);
+    assertThat(logs).allMatch(line -> line.contains("search_mode=ame"));
+    assertThat(ttftLogs).hasSize(1);
+    assertThat(field(ttftLogs.getFirst(), "search_mode")).isEqualTo("ame");
+    assertTtftComponents(ttftLogs.getFirst(), logs);
+  }
+
+  @Test
   void defaultClassifierAndRagflowSettings() {
     var config = new AgentSettings(new MockEnvironment());
     assertThat(config.classifierUrl).isEqualTo("");

@@ -214,3 +214,11 @@ LTS 按日志流保存日志，一个日志组可包含多个日志流。日志�
 `CLASSIFIER_FALLBACK_ON_TRANSIENT_ERROR` 默认 false。设为 true 后，仅分类调用超时、连接失败、HTTP 5xx 转视觉模型；不重试分类、不调用知识库。401/403、其他 HTTP 4xx、配置错误、TLS/DNS、业务失败和响应格式错误终止流程。降级需要请求中提供 text_vision 模型配置，否则按既有缺少模型配置错误返回。
 
 所有分类故障记录 INFO `workflow_diagnostic event=classifier_failed`，包含 execution_id、status=service_failed、code、failure_kind、受控 reason、fallback_to_vision 和 alert=true。正常低置信度不是故障，不产生该事件。日志不包含上游响应正文、图片或原始异常；alert 字段可用于 LTS 告警规则，本次不创建云端告警。降级后整个工作流可能成功，仍可通过此事件发现被降级掩盖的服务故障。
+
+## AME 独立检索日志
+
+`KNOWLEDGE_BACKEND=ame` 时，Agent 输出 `ame_config`、`ame_result`、`ame_content`（正文开关打开时）、`ame_skipped`、`ame_failed`；字段含义沿用 RAGFlow 诊断，增加 `backend=ame`。`ame_result` 只从远端元数据接受非负有限数值的 `ame_recall_ms`、`cheap_rerank_ms`、`queue_ms`、`adapter_ms`。本次 graph 服务不做 cheap rerank，因此不返回该项。
+
+阶段和 TTFT 日志使用 `search_mode=ame`；关闭检索仍为 `disabled`。`search_text_ms` / `search_image_ms` 包含网络、服务端排队及检索；`ame_recall_ms` 仅为服务端 AME 检索，`adapter_ms` 为服务端处理耗时。不要把这些嵌套耗时重复加到 TTFT。
+
+ECS 服务日志使用 `journalctl -u travel-ame -f` 查看，包含启动切片数、检索结果数量和耗时，不打印问题、正文或 Token。AgentArts 内的 Agent 日志仍按上面的 LTS 流程查看。

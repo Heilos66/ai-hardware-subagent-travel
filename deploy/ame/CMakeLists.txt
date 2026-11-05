@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.16)
+project(travel_ame_service CXX)
+set(CMAKE_CXX_STANDARD 17)
+if(NOT AME_SOURCE)
+  message(FATAL_ERROR "Set -DAME_SOURCE=/path/to/pinned/ame")
+endif()
+# The pinned upstream uses fixed-width integers without including this header.
+add_compile_options(-include cstdint)
+add_subdirectory("${AME_SOURCE}" upstream EXCLUDE_FROM_ALL)
+add_executable(ame_worker worker.cpp)
+target_link_libraries(ame_worker PRIVATE ame_engine)
